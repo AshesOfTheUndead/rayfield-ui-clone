@@ -440,9 +440,15 @@ FarmTab:CreateSection("⚙️ OPTIONS")
 FarmTab:CreateToggle({Name = "🛡️ Anti-Detect", CurrentValue = false, Callback = function(t) Config.AntiDetect=t end})
 FarmTab:CreateToggle({Name = "🔥 MAX PERFORMANCE", CurrentValue = false, Callback = function(t) Config.MaxPerformance=t end})
 local farmToggle = FarmTab:CreateToggle({
-    Name = "▶️ START FARM",
+    Name = "▶️ FARM: OFF",
     CurrentValue = false,
-    Callback = function(t) task.spawn(function() Config.FarmEnabled=t if t then startFarm() else stopFarm() end end) end,
+    Callback = function(t)
+        task.spawn(function()
+            Config.FarmEnabled = t
+            farmToggle:SetLabel(t and "▶️ FARM: ON" or "▶️ FARM: OFF")
+            if t then startFarm() else stopFarm() end
+        end)
+    end,
 })
 FarmTab:CreateButton({Name = "🚀 TURBO BOOST", Callback = function() task.spawn(setTurbo) end})
 FarmTab:CreateSection("🌙 OVERNIGHT")
@@ -465,7 +471,15 @@ end)
 -- ═══ TAB: Move ═══
 local MoveTab = Window:CreateTab("Move", "🏃")
 MoveTab:CreateSection("⚡ WALK & JUMP")
-local ot = MoveTab:CreateToggle({Name = "🔧 Override Stats", CurrentValue = false, Callback = function(t) Config.OverrideStats=t if t then applyMovement() else restoreMovement() end end})
+local ot = MoveTab:CreateToggle({
+    Name = "🔧 Override Stats: OFF",
+    CurrentValue = false,
+    Callback = function(t)
+        Config.OverrideStats = t
+        ot:SetLabel(t and "🔧 Override Stats: ON" or "🔧 Override Stats: OFF")
+        if t then applyMovement() else restoreMovement() end
+    end,
+})
 local ws = MoveTab:CreateSlider({Name = "🏃 WalkSpeed", Range = {16, 1000}, Increment = 1, CurrentValue = 16, Suffix = " sp", Callback = function(v) Config.WalkSpeed=v applyMovement() end})
 local js = MoveTab:CreateSlider({Name = "🦘 JumpPower", Range = {50, 1000}, Increment = 1, CurrentValue = 50, Suffix = " pw", Callback = function(v) Config.JumpPower=v applyMovement() end})
 MoveTab:CreateButton({Name = "🔄 Reset (16/50)", Callback = function()
@@ -475,7 +489,14 @@ MoveTab:CreateButton({Name = "🔄 Reset (16/50)", Callback = function()
 end})
 MoveTab:CreateSection("👻 NOCLIP")
 MoveTab:CreateDropdown({Name = "⚙️ Mode", Options = {"V777", "Improved"}, CurrentOption = "Improved", Callback = function(v) Config.NoclipMode=v if Config.NoclipEnabled then task.spawn(function() setNoclipMode(false) task.wait(0.05) setNoclipMode(true) end) end end})
-MoveTab:CreateToggle({Name = "👻 Noclip", CurrentValue = false, Callback = function(t) task.spawn(function() setNoclipMode(t) end) end})
+local noclipToggle = MoveTab:CreateToggle({
+    Name = "👻 Noclip: OFF",
+    CurrentValue = false,
+    Callback = function(t)
+        task.spawn(function() setNoclipMode(t) end)
+        noclipToggle:SetLabel(t and "👻 Noclip: ON" or "👻 Noclip: OFF")
+    end,
+})
 
 -- ═══ TAB: Identity ═══
 local IdTab = Window:CreateTab("ID", "🎭")
@@ -507,7 +528,15 @@ ChatTab:CreateButton({Name = "🧹 Clear", Callback = function() chatInput:Set("
 local LabTab = Window:CreateTab("Lab", "🧪")
 LabTab:CreateSection("⚙️ EXPERIMENTS")
 LabTab:CreateToggle({Name = "🛡️ Anti-AFK", CurrentValue = true, Callback = function(t) Config.AntiAfk=t end})
-LabTab:CreateToggle({Name = "⚔️ PVP Off (ON)", CurrentValue = true, Callback = function(t) Config.PvpOff=t end})
+local pvpToggle = LabTab:CreateToggle({
+    Name = "⚔️ PVP: OFF (Safe)",
+    CurrentValue = true,
+    Callback = function(t)
+        Config.PvpOff = t
+        -- [FIX] Dynamic label — shows current state so user knows it worked
+        pvpToggle:SetLabel(t and "⚔️ PVP: OFF (Safe)" or "⚔️ PVP: ON (Danger)")
+    end,
+})
 LabTab:CreateSection("👁️ ESP")
 local function toggleESP(t)
     Config.EspEnabled=t
