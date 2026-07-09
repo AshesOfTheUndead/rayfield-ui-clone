@@ -1969,117 +1969,118 @@ function Library:CreateWindow(cfg)
 			end
 			obj.CurrentOption = multi and selectionList() or selectionList()[1]
 
-			local function openList()
-				closeCurrentPopup()
-				arrow.Text = "▴"
+				local function openList()
+					closeCurrentPopup()
+					arrow.Text = "▴"
 
-				local catcher = Instance.new("TextButton")
-				catcher.Size = UDim2.new(1, 0, 1, 0)
-				catcher.BackgroundTransparency = 1
-				catcher.Text = ""
-				catcher.AutoButtonColor = false
-				catcher.Active = true
-				catcher.ZIndex = 8
-				catcher.Parent = screenGui
+					local catcher = Instance.new("TextButton")
+					catcher.Size = UDim2.new(1, 0, 1, 0)
+					catcher.BackgroundTransparency = 1
+					catcher.Text = ""
+					catcher.AutoButtonColor = false
+					catcher.Active = true
+					catcher.ZIndex = 8
+					catcher.Parent = screenGui
 
-				local hPos, hSize = holder.AbsolutePosition, holder.AbsoluteSize
-				local ITEM_H = 30
-				local LIST_H = math.min(#options, 7) * (ITEM_H + 2) + 10
-				local cam = workspace.CurrentCamera
-				local vpH = cam and cam.ViewportSize.Y or 800
-				local dropDown = (hPos.Y + hSize.Y + LIST_H + 6 <= vpH)
-				local listY = dropDown and (hPos.Y + hSize.Y + 4) or (hPos.Y - LIST_H - 4)
+					local hPos, hSize = holder.AbsolutePosition, holder.AbsoluteSize
+					local ITEM_H = 30
+					local LIST_H = math.min(#options, 7) * (ITEM_H + 2) + 10
+					local cam = workspace.CurrentCamera
+					local vpH = cam and cam.ViewportSize.Y or 800
+					local dropDown = (hPos.Y + hSize.Y + LIST_H + 6 <= vpH)
+					local listY = dropDown and (hPos.Y + hSize.Y + 4) or (hPos.Y - LIST_H - 4)
 
-				local list = Instance.new("ScrollingFrame")
-				list.Size = UDim2.new(0, hSize.X, 0, 0)
-				list.Position = UDim2.new(0, hPos.X, 0, dropDown and (hPos.Y + hSize.Y + 4) or hPos.Y)
-				list.BackgroundColor3 = C.panel
-				list.BackgroundTransparency = 0.15
-				list.BorderSizePixel = 0
-				list.ClipsDescendants = true
-				list.ScrollBarThickness = 3
-				list.ScrollBarImageColor3 = C.accent
-				list.CanvasSize = UDim2.new(0, 0, 0, #options * (ITEM_H + 2) + 10)
-				list.ZIndex = 9
-				list.Parent = screenGui
-				corner(list, R.panel)
-				stroke(list, C.accent, 1)
+					local list = Instance.new("ScrollingFrame")
+					list.Size = UDim2.new(0, hSize.X, 0, 0)
+					list.Position = UDim2.new(0, hPos.X, 0, dropDown and (hPos.Y + hSize.Y + 4) or hPos.Y)
+					list.BackgroundColor3 = C.panel
+					list.BackgroundTransparency = 0.15
+					list.BorderSizePixel = 0
+					list.ClipsDescendants = true
+					list.ScrollBarThickness = 3
+					list.ScrollBarImageColor3 = C.accent
+					list.CanvasSize = UDim2.new(0, 0, 0, #options * (ITEM_H + 2) + 10)
+					list.ZIndex = 9
+					list.Parent = screenGui
+					corner(list, R.panel)
+					stroke(list, C.accent, 1)
 
-				Tween(list, T15, {
-					Size = UDim2.new(0, hSize.X, 0, LIST_H),
-					Position = UDim2.new(0, hPos.X, 0, listY),
-					BackgroundTransparency = 0,
-				})
+					Tween(list, T15, {
+						Size = UDim2.new(0, hSize.X, 0, LIST_H),
+						Position = UDim2.new(0, hPos.X, 0, listY),
+						BackgroundTransparency = 0,
+					})
 
-				local lL = Instance.new("UIListLayout")
-				lL.Padding = UDim.new(0, 2)
-				lL.Parent = list
-				pad(list, 4, 4, 4, 4)
+					local lL = Instance.new("UIListLayout")
+					lL.Padding = UDim.new(0, 2)
+					lL.Parent = list
+					pad(list, 4, 4, 4, 4)
 
-				for _, opt in ipairs(options) do
-					local item = Instance.new("TextButton")
-					item.Size = UDim2.new(1, -4, 0, ITEM_H)
-					item.BackgroundColor3 = C.panelAlt
-					item.Text = ""
-					item.AutoButtonColor = false
-					item.ZIndex = 10
-					item.Parent = list
-					corner(item, R.small)
+					local function closePopup()
+						pcall(function() catcher:Destroy() end)
+						pcall(function() list:Destroy() end)
+						arrow.Text = "▾"
+					end
 
-					local iLbl = Instance.new("TextLabel")
-					iLbl.Size = UDim2.new(1, -30, 1, 0)
-					iLbl.Position = UDim2.new(0, 10, 0, 0)
-					iLbl.BackgroundTransparency = 1
-					iLbl.Font = Enum.Font.Gotham
-					iLbl.TextSize = 13
-					iLbl.TextColor3 = selected[opt] and C.accent or C.text
-					iLbl.TextXAlignment = Enum.TextXAlignment.Left
-					iLbl.Text = opt
-					iLbl.ZIndex = 10
-					iLbl.Parent = item
+					for _, opt in ipairs(options) do
+						local item = Instance.new("TextButton")
+						item.Size = UDim2.new(1, -4, 0, ITEM_H)
+						item.BackgroundColor3 = C.panelAlt
+						item.Text = ""
+						item.AutoButtonColor = false
+						item.ZIndex = 10
+						item.Parent = list
+						corner(item, R.small)
 
-					local check = Instance.new("TextLabel")
-					check.Size = UDim2.new(0, 18, 1, 0)
-					check.Position = UDim2.new(1, -22, 0, 0)
-					check.BackgroundTransparency = 1
-					check.Font = Enum.Font.GothamBold
-					check.TextSize = 13
-					check.TextColor3 = C.accent
-					check.Text = selected[opt] and "✓" or ""
-					check.ZIndex = 10
-					check.Parent = item
+						local iLbl = Instance.new("TextLabel")
+						iLbl.Size = UDim2.new(1, -30, 1, 0)
+						iLbl.Position = UDim2.new(0, 10, 0, 0)
+						iLbl.BackgroundTransparency = 1
+						iLbl.Font = Enum.Font.Gotham
+						iLbl.TextSize = 13
+						iLbl.TextColor3 = selected[opt] and C.accent or C.text
+						iLbl.TextXAlignment = Enum.TextXAlignment.Left
+						iLbl.Text = opt
+						iLbl.ZIndex = 10
+						iLbl.Parent = item
 
-					item.MouseEnter:Connect(function()
-						Tween(item, T10, { BackgroundColor3 = C.panelHov })
-					end)
-					item.MouseLeave:Connect(function()
-						Tween(item, T10, { BackgroundColor3 = C.panelAlt })
-					end)
-					item.MouseButton1Click:Connect(function()
-						if multi then
-							selected[opt] = not selected[opt] or nil
-							check.Text = selected[opt] and "✓" or ""
-							iLbl.TextColor3 = selected[opt] and C.accent or C.text
-							refreshLabel()
-							fire()
-							-- multi stays open so several can be picked
-						else
-							table.clear(selected)
-							selected[opt] = true
-							refreshLabel()
-							closeCurrentPopup()
-							fire()
-						end
-					end)
+						local check = Instance.new("TextLabel")
+						check.Size = UDim2.new(0, 18, 1, 0)
+						check.Position = UDim2.new(1, -22, 0, 0)
+						check.BackgroundTransparency = 1
+						check.Font = Enum.Font.GothamBold
+						check.TextSize = 13
+						check.TextColor3 = C.accent
+						check.Text = selected[opt] and "✓" or ""
+						check.ZIndex = 10
+						check.Parent = item
+
+						item.MouseEnter:Connect(function()
+							Tween(item, T10, { BackgroundColor3 = C.panelHov })
+						end)
+						item.MouseLeave:Connect(function()
+							Tween(item, T10, { BackgroundColor3 = C.panelAlt })
+						end)
+						item.MouseButton1Click:Connect(function()
+							if multi then
+								selected[opt] = not selected[opt] or nil
+								check.Text = selected[opt] and "✓" or ""
+								iLbl.TextColor3 = selected[opt] and C.accent or C.text
+								refreshLabel()
+								fire()
+							else
+								table.clear(selected)
+								selected[opt] = true
+								refreshLabel()
+								closePopup()
+								fire()
+							end
+						end)
+					end
+
+					catcher.MouseButton1Click:Connect(closePopup)
+					currentPopupJanitor = nil  -- no Janitor, direct cleanup
 				end
-				catcher.MouseButton1Click:Connect(closeCurrentPopup)
-
-				local pj = Janitor.new()
-				pj:Add(catcher)
-				pj:Add(list)
-				pj:Add(function() arrow.Text = "▾" end)
-				currentPopupJanitor = pj
-			end
 
 			holder.InputBegan:Connect(function(inp)
 				if inp.UserInputType == Enum.UserInputType.MouseButton1
