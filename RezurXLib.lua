@@ -2320,20 +2320,11 @@ function Library:CreateWindow(cfg)
 			corner(swatch, R.small)
 			stroke(swatch, C.border, 1.5)
 
-			swatch.MouseEnter:Connect(function()
-				Tween(swatch, T10, { Size = UDim2.new(0, 62, 0, 32) })
-			end)
-			swatch.MouseLeave:Connect(function()
-				Tween(swatch, T10, { Size = UDim2.new(0, 58, 0, 30) })
-			end)
-
 			local obj = { Color = ccfg.Color or C.white }
 
 			local function openPicker()
 				closeCurrentPopup()
-				local r = math.floor(obj.Color.R * 255 + 0.5)
-				local g = math.floor(obj.Color.G * 255 + 0.5)
-				local b = math.floor(obj.Color.B * 255 + 0.5)
+				local h, s, v = obj.Color:ToHSV()
 
 				local catcher = Instance.new("TextButton")
 				catcher.Size = UDim2.new(1, 0, 1, 0)
@@ -2341,6 +2332,7 @@ function Library:CreateWindow(cfg)
 				catcher.BackgroundTransparency = 1
 				catcher.Text = ""
 				catcher.AutoButtonColor = false
+				catcher.Active = true
 				catcher.ZIndex = 8
 				catcher.Parent = screenGui
 				Tween(catcher, T15, { BackgroundTransparency = 0.5 })
@@ -2348,30 +2340,23 @@ function Library:CreateWindow(cfg)
 				local sp = swatch.AbsolutePosition
 				local cam = workspace.CurrentCamera
 				local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-				local px = math.clamp(sp.X - 240, 10, vp.X - 310)
-				local py = math.clamp(sp.Y - 225, 10, vp.Y - 245)
+				local px = math.clamp(sp.X - 160, 10, vp.X - 280)
+				local py = math.clamp(sp.Y - 270, 10, vp.Y - 290)
 
 				local panel = Instance.new("Frame")
-				panel.Size = UDim2.new(0, 302, 0, 0)
-				panel.Position = UDim2.new(0, px, 0, py + 12)
+				panel.Size = UDim2.new(0, 270, 0, 280)
+				panel.Position = UDim2.new(0, px, 0, py)
 				panel.BackgroundColor3 = C.panel
-				panel.BackgroundTransparency = 1
 				panel.BorderSizePixel = 0
-				panel.ClipsDescendants = true
 				panel.Active = true
 				panel.ZIndex = 9
 				panel.Parent = screenGui
-				corner(panel, R.panel + 2)
+				corner(panel, R.panel)
 				stroke(panel, C.accent, 1.5)
-				Tween(panel, T20, {
-					Size = UDim2.new(0, 302, 0, 238),
-					Position = UDim2.new(0, px, 0, py),
-					BackgroundTransparency = 0,
-				})
 
 				local pTtl = Instance.new("TextLabel")
 				pTtl.Size = UDim2.new(1, -72, 0, 20)
-				pTtl.Position = UDim2.new(0, 14, 0, 12)
+				pTtl.Position = UDim2.new(0, 14, 0, 10)
 				pTtl.BackgroundTransparency = 1
 				pTtl.Font = Enum.Font.GothamBold
 				pTtl.TextSize = 13
@@ -2382,18 +2367,101 @@ function Library:CreateWindow(cfg)
 				pTtl.Parent = panel
 
 				local preview = Instance.new("Frame")
-				preview.Size = UDim2.new(0, 48, 0, 48)
-				preview.Position = UDim2.new(1, -60, 0, 12)
+				preview.Size = UDim2.new(0, 40, 0, 40)
+				preview.Position = UDim2.new(1, -52, 0, 10)
 				preview.BackgroundColor3 = obj.Color
 				preview.BorderSizePixel = 0
 				preview.ZIndex = 9
 				preview.Parent = panel
-				corner(preview, R.panel)
+				corner(preview, R.small)
 				stroke(preview, C.border, 1.5)
 
+				-- HSV color pad (saturation x value)
+				local pad = Instance.new("TextButton")
+				pad.Size = UDim2.new(0, 200, 0, 150)
+				pad.Position = UDim2.new(0, 14, 0, 40)
+				pad.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+				pad.AutoButtonColor = false
+				pad.BorderSizePixel = 0
+				pad.Text = ""
+				pad.ZIndex = 9
+				pad.Parent = panel
+				corner(pad, R.small)
+				-- White gradient (left to right = saturation)
+				local padWhite = Instance.new("Frame")
+				padWhite.Size = UDim2.new(1, 0, 1, 0)
+				padWhite.BackgroundColor3 = C.white
+				padWhite.BackgroundTransparency = 0
+				padWhite.BorderSizePixel = 0
+				padWhite.ZIndex = 9
+				padWhite.Parent = pad
+				local padWhiteGrad = Instance.new("UIGradient")
+				padWhiteGrad.Color = ColorSequence.new(C.white, Color3.new(0,0,0))
+				padWhiteGrad.Transparency = NumberSequence.new(0, 1)
+				padWhiteGrad.Parent = padWhite
+				-- Black gradient (top to bottom = value)
+				local padBlack = Instance.new("Frame")
+				padBlack.Size = UDim2.new(1, 0, 1, 0)
+				padBlack.BackgroundColor3 = C.black
+				padBlack.BorderSizePixel = 0
+				padBlack.ZIndex = 10
+				padBlack.Parent = pad
+				local padBlackGrad = Instance.new("UIGradient")
+				padBlackGrad.Color = ColorSequence.new(C.black, Color3.new(0,0,0))
+				padBlackGrad.Transparency = NumberSequence.new(1, 0)
+				padBlackGrad.Rotation = 90
+				padBlackGrad.Parent = padBlack
+
+				-- Pointer on the pad
+				local pointer = Instance.new("Frame")
+				pointer.Size = UDim2.new(0, 10, 0, 10)
+				pointer.AnchorPoint = Vector2.new(0.5, 0.5)
+				pointer.Position = UDim2.new(s, 0, 1 - v, 0)
+				pointer.BackgroundColor3 = C.white
+				pointer.BorderSizePixel = 0
+				pointer.ZIndex = 12
+				pointer.Parent = pad
+				corner(pointer, UDim.new(1, 0))
+				stroke(pointer, C.black, 1.5)
+
+				-- Hue slider (rainbow)
+				local hueSlider = Instance.new("TextButton")
+				hueSlider.Size = UDim2.new(0, 200, 0, 14)
+				hueSlider.Position = UDim2.new(0, 14, 0, 200)
+				hueSlider.BackgroundColor3 = C.white
+				hueSlider.AutoButtonColor = false
+				hueSlider.BorderSizePixel = 0
+				hueSlider.Text = ""
+				hueSlider.ZIndex = 9
+				hueSlider.Parent = panel
+				corner(hueSlider, UDim.new(1, 0))
+				local hueGrad = Instance.new("UIGradient")
+				hueGrad.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(0, 1, 1)),
+					ColorSequenceKeypoint.new(0.17, Color3.fromHSV(0.17, 1, 1)),
+					ColorSequenceKeypoint.new(0.33, Color3.fromHSV(0.33, 1, 1)),
+					ColorSequenceKeypoint.new(0.5, Color3.fromHSV(0.5, 1, 1)),
+					ColorSequenceKeypoint.new(0.67, Color3.fromHSV(0.67, 1, 1)),
+					ColorSequenceKeypoint.new(0.83, Color3.fromHSV(0.83, 1, 1)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1)),
+				})
+				hueGrad.Parent = hueSlider
+
+				local hueKnob = Instance.new("Frame")
+				hueKnob.Size = UDim2.new(0, 6, 0, 18)
+				hueKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+				hueKnob.Position = UDim2.new(h, 0, 0.5, 0)
+				hueKnob.BackgroundColor3 = C.white
+				hueKnob.BorderSizePixel = 0
+				hueKnob.ZIndex = 10
+				hueKnob.Parent = hueSlider
+				corner(hueKnob, UDim.new(1, 0))
+				stroke(hueKnob, C.black, 1.5)
+
+				-- Hex display
 				local hexLbl = Instance.new("TextLabel")
 				hexLbl.Size = UDim2.new(0, 120, 0, 20)
-				hexLbl.Position = UDim2.new(0, 14, 0, 150)
+				hexLbl.Position = UDim2.new(0, 14, 0, 225)
 				hexLbl.BackgroundTransparency = 1
 				hexLbl.Font = Enum.Font.Code
 				hexLbl.TextSize = 12
@@ -2402,94 +2470,12 @@ function Library:CreateWindow(cfg)
 				hexLbl.ZIndex = 9
 				hexLbl.Parent = panel
 
-				local function refreshHex()
-					hexLbl.Text = string.format("#%02X%02X%02X", r, g, b)
-				end
-				local function updateColor()
-					obj.Color = Color3.fromRGB(r, g, b)
-					swatch.BackgroundColor3 = obj.Color
-					preview.BackgroundColor3 = obj.Color
-					refreshHex()
-					if callback then pcall(callback, obj.Color) end
-				end
-
-				local function makeChannel(ch, yPos, getV, setV)
-					local cl = Instance.new("TextLabel")
-					cl.Size = UDim2.new(0, 14, 0, 20)
-					cl.Position = UDim2.new(0, 14, 0, yPos)
-					cl.BackgroundTransparency = 1
-					cl.Font = Enum.Font.GothamBold
-					cl.TextSize = 13
-					cl.TextColor3 = C.text
-					cl.Text = ch
-					cl.ZIndex = 9
-					cl.Parent = panel
-
-					local tr = Instance.new("TextButton")
-					tr.Size = UDim2.new(0, 200, 0, 14)
-					tr.Position = UDim2.new(0, 34, 0, yPos + 3)
-					tr.BackgroundColor3 = C.track
-					tr.Text = ""
-					tr.AutoButtonColor = false
-					tr.ZIndex = 9
-					tr.Parent = panel
-					corner(tr, UDim.new(1, 0))
-
-					local fl = Instance.new("Frame")
-					fl.Size = UDim2.new(getV() / 255, 0, 1, 0)
-					fl.BackgroundColor3 = C.accent
-					fl.BorderSizePixel = 0
-					fl.ZIndex = 9
-					fl.Parent = tr
-					corner(fl, UDim.new(1, 0))
-
-					local kb = Instance.new("Frame")
-					kb.Size = UDim2.new(0, 18, 0, 18)
-					kb.Position = UDim2.new(getV() / 255, -9, 0.5, -9)
-					kb.BackgroundColor3 = C.white
-					kb.BorderSizePixel = 0
-					kb.ZIndex = 10
-					kb.Parent = tr
-					corner(kb, UDim.new(1, 0))
-					stroke(kb, C.accent, 1)
-
-					local vl = Instance.new("TextLabel")
-					vl.Size = UDim2.new(0, 36, 0, 20)
-					vl.Position = UDim2.new(0, 242, 0, yPos)
-					vl.BackgroundTransparency = 1
-					vl.Font = Enum.Font.Code
-					vl.TextSize = 12
-					vl.TextColor3 = C.muted
-					vl.TextXAlignment = Enum.TextXAlignment.Right
-					vl.Text = tostring(getV())
-					vl.ZIndex = 9
-					vl.Parent = panel
-
-					local function sx(x)
-						local pct = math.clamp((x - tr.AbsolutePosition.X) / tr.AbsoluteSize.X, 0, 1)
-						local v = math.floor(pct * 255 + 0.5)
-						setV(v)
-						fl.Size = UDim2.new(pct, 0, 1, 0)
-						kb.Position = UDim2.new(pct, -9, 0.5, -9)
-						vl.Text = tostring(v)
-						updateColor()
-					end
-					tr.MouseButton1Down:Connect(function()
-						sx(UserInputService:GetMouseLocation().X)
-						registerDrag(tr, function(pos) sx(pos.X) end)
-					end)
-				end
-
-				makeChannel("R", 54, function() return r end, function(v) r = v end)
-				makeChannel("G", 84, function() return g end, function(v) g = v end)
-				makeChannel("B", 114, function() return b end, function(v) b = v end)
-				refreshHex()
-
+				-- Done button
 				local doneBtn = Instance.new("TextButton")
-				doneBtn.Size = UDim2.new(0, 122, 0, 32)
-				doneBtn.Position = UDim2.new(1, -136, 0, 194)
+				doneBtn.Size = UDim2.new(0, 80, 0, 28)
+				doneBtn.Position = UDim2.new(1, -92, 0, 240)
 				doneBtn.BackgroundColor3 = C.accent
-				doneBtn.Text = "Apply"
+				doneBtn.Text = "Done"
 				doneBtn.Font = Enum.Font.GothamBold
 				doneBtn.TextSize = 13
 				doneBtn.TextColor3 = C.white
@@ -2498,22 +2484,62 @@ function Library:CreateWindow(cfg)
 				doneBtn.ZIndex = 10
 				doneBtn.Parent = panel
 				corner(doneBtn, R.small)
-				doneBtn.MouseEnter:Connect(function()
-					Tween(doneBtn, T10, { BackgroundColor3 = C.accentHi })
-				end)
-				doneBtn.MouseLeave:Connect(function()
-					Tween(doneBtn, T10, { BackgroundColor3 = C.accent })
-				end)
-				doneBtn.MouseButton1Click:Connect(closeCurrentPopup)
-				catcher.MouseButton1Click:Connect(closeCurrentPopup)
 
-				local pj = Janitor.new()
-				pj:Add(catcher)
-				pj:Add(panel)
-				currentPopupJanitor = pj
+				-- Update function — fires callback LIVE
+				local function update()
+					obj.Color = Color3.fromHSV(h, s, v)
+					swatch.BackgroundColor3 = obj.Color
+					preview.BackgroundColor3 = obj.Color
+					pad.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+				pointer.Position = UDim2.new(s, 0, 1 - v, 0)
+				hueKnob.Position = UDim2.new(h, 0, 0.5, 0)
+				local r2, g2, b2 = math.floor(obj.Color.R * 255 + 0.5), math.floor(obj.Color.G * 255 + 0.5), math.floor(obj.Color.B * 255 + 0.5)
+				hexLbl.Text = string.format("#%02X%02X%02X", r2, g2, b2)
+				if callback then pcall(callback, obj.Color) end
+				end
+				update()
+
+				-- Pad drag — uses InputBegan for mouse+touch support
+				pad.InputBegan:Connect(function(inp)
+					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+						registerDrag(pad, function(pos)
+							local px2 = math.clamp((pos.X - pad.AbsolutePosition.X) / pad.AbsoluteSize.X, 0, 1)
+							local py2 = math.clamp((pos.Y - pad.AbsolutePosition.Y) / pad.AbsoluteSize.Y, 0, 1)
+							s = px2
+							v = 1 - py2
+							update()
+						end)
+						-- Set initial position
+						s = math.clamp((inp.Position.X - pad.AbsolutePosition.X) / pad.AbsoluteSize.X, 0, 1)
+						v = 1 - math.clamp((inp.Position.Y - pad.AbsolutePosition.Y) / pad.AbsoluteSize.Y, 0, 1)
+						update()
+					end
+				end)
+
+				-- Hue slider drag — uses InputBegan for mouse+touch
+				hueSlider.InputBegan:Connect(function(inp)
+					if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+						registerDrag(hueSlider, function(pos)
+							h = math.clamp((pos.X - hueSlider.AbsolutePosition.X) / hueSlider.AbsoluteSize.X, 0, 1)
+							update()
+						end)
+						h = math.clamp((inp.Position.X - hueSlider.AbsolutePosition.X) / hueSlider.AbsoluteSize.X, 0, 1)
+						update()
+					end
+				end)
+
+				-- Close popup
+				local function closePopup()
+					pcall(function() catcher:Destroy() end)
+					pcall(function() panel:Destroy() end)
+				end
+				doneBtn.MouseButton1Click:Connect(closePopup)
+				catcher.MouseButton1Click:Connect(closePopup)
+				currentPopupJanitor = nil
 			end
 
 			swatch.MouseButton1Click:Connect(openPicker)
+
 			function obj:Set(color)
 				obj.Color = color
 				swatch.BackgroundColor3 = color
@@ -2525,6 +2551,7 @@ function Library:CreateWindow(cfg)
 				Tween(holder, T20, { BackgroundColor3 = C.panel })
 				Tween(hStroke, T20, { Color = C.border })
 				Tween(lbl, T20, { TextColor3 = C.text })
+				Tween(swatch, T20, { })
 			end)
 			registerFlag(ccfg.Flag, obj)
 			return obj
