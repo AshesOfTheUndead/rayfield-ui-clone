@@ -304,8 +304,8 @@ function Library:CreateWindow(cfg)
 	local loadingTitle = cfg.LoadingTitle or windowName
 	local loadingOn    = cfg.LoadingEnabled ~= false
 	local toggleKey    = cfg.ToggleUIKeybind or Enum.KeyCode.K
-	local WIN_W        = (cfg.Size and cfg.Size.X) or 420  -- bigger (was 320, text was cramped)
-	local WIN_H        = (cfg.Size and cfg.Size.Y) or 480  -- bigger (was 380)
+	local WIN_W        = (cfg.Size and cfg.Size.X) or 460  -- bigger (was 420)
+	local WIN_H        = (cfg.Size and cfg.Size.Y) or 500  -- bigger (was 480)
 	local MIN_W, MIN_H = 300, 360  -- minimum resizable size
 	local MAX_W, MAX_H = 900, 900  -- maximum resizable size
 
@@ -765,20 +765,25 @@ function Library:CreateWindow(cfg)
 	floatIcon.Parent = screenGui
 	corner(floatIcon, UDim.new(1, 0))
 	stroke(floatIcon, C.white, 2)
+	-- [FIX] Track movement so tap (restore) vs drag (move) is distinguished
+	local floatDragMoved = false
 	floatIcon.InputBegan:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
 			local startDrag = inp.Position
-			local startPos = floatIcon.Position
+			local startAbs = floatIcon.AbsolutePosition  -- [FIX] screen pixels
+			floatDragMoved = false
 			local vp = getViewport()
 			registerDrag("floatIcon", function(pos)
 				local d = pos - startDrag
-				local nx = math.clamp(startPos.X.Offset + d.X, 0, vp.X - 44)
-				local ny = math.clamp(startPos.Y.Offset + d.Y, 0, vp.Y - 44)
+				if d.Magnitude > 6 then floatDragMoved = true end  -- threshold
+				local nx = math.clamp(startAbs.X + d.X, 0, vp.X - 44)
+				local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 44)
 				floatIcon.Position = UDim2.new(0, nx, 0, ny)
 			end)
 		end
 	end)
 	floatIcon.Activated:Connect(function()
+		if floatDragMoved then return end  -- [FIX] was a drag, not a tap
 		floatIcon.Visible = false
 		frame.Visible = true
 		shadow.Visible = true
@@ -813,13 +818,15 @@ function Library:CreateWindow(cfg)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1
                         or inp.UserInputType == Enum.UserInputType.Touch then
                         local dragStart = inp.Position
-                        local startPos = frame.Position
+                        -- [FIX] Use AbsolutePosition (screen pixels) not Position.Offset
+                        -- Position has scale 0.5/0.55, .Offset gives -WIN_W/2 → flinging
+                        local startAbs = frame.AbsolutePosition
                         Tween(shadow, T15, { BackgroundTransparency = 0.65 })
                         local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
                         registerDrag("window", function(pos)
                                 local d = pos - dragStart
-                                local nx = math.clamp(startPos.X.Offset + d.X, -WIN_W + 100, vp.X - 100)
-                                local ny = math.clamp(startPos.Y.Offset + d.Y, 0, vp.Y - 30)
+                                local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
+                                local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
                                 frame.Position = UDim2.new(0, nx, 0, ny)
                                 shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
                         end, function()
@@ -999,13 +1006,13 @@ function Library:CreateWindow(cfg)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1
 			or inp.UserInputType == Enum.UserInputType.Touch then
 		local dragStart = inp.Position
-		local startPos = frame.Position
+		local startAbs = frame.AbsolutePosition  -- [FIX] screen pixels
 		Tween(shadow, T15, { BackgroundTransparency = 0.65 })
 		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
 		registerDrag("statusbar", function(pos)
 			local d = pos - dragStart
-			local nx = math.clamp(startPos.X.Offset + d.X, -WIN_W + 100, vp.X - 100)
-			local ny = math.clamp(startPos.Y.Offset + d.Y, 0, vp.Y - 30)
+			local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
+			local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
 			frame.Position = UDim2.new(0, nx, 0, ny)
 			shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
 		end, function()
@@ -1336,7 +1343,8 @@ function Library:CreateWindow(cfg)
 
 	local function moveIndicatorTo(btn, animated)
 		local w = btn.AbsoluteSize.X
-		local relX = btn.Position.X.Offset
+		-- [FIX] Use absolute position relative to tabBar
+		local relX = btn.AbsolutePosition.X - tabBar.AbsolutePosition.X
 		local goal = UDim2.new(0, relX, 0, tabIndicator.Position.Y.Offset)
 		local goalSize = UDim2.new(0, w, 0, tabIndicator.Size.Y.Offset)
 		if animated then
@@ -1352,9 +1360,9 @@ function Library:CreateWindow(cfg)
 
 		local btn = Instance.new("TextButton")
 		btn.Name = "TabChip"
-		-- [FIX] AutomaticSize X so btn grows to fit icon+text (was 0 width → blank)
-		btn.Size = UDim2.new(0, 70, 1, -10)
-		btn.AutomaticSize = Enum.AutomaticSize.X
+		-- [FIX] Fixed width, no AutomaticSize, no UIListLayout.
+		-- AutomaticSize + UIListLayout caused circular layout → 0-size → blank tabs.
+		btn.Size = UDim2.new(0, 88, 1, -10)
 		btn.Position = UDim2.new(0, 0, 0, 5)
 		btn.BackgroundColor3 = C.tabChip
 		btn.AutoButtonColor = false
@@ -1364,35 +1372,30 @@ function Library:CreateWindow(cfg)
 		btn.Parent = tabBar
 		corner(btn, R.tab)
 		local chipStroke = stroke(btn, C.borderAcc, 1)
-
-		local rowLayout = Instance.new("UIListLayout")
-		rowLayout.FillDirection = Enum.FillDirection.Horizontal
-		rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		rowLayout.Padding = UDim.new(0, 5)
-		rowLayout.Parent = btn
-		pad(btn, 0, 0, 12, 12)
-
+		
+		-- [FIX] Icon at fixed position (left, 8px margin)
 		local iconLbl = Instance.new("TextLabel")
-		iconLbl.Size = UDim2.new(0, icon and 16 or 0, 1, 0)
+		iconLbl.Size = UDim2.new(0, 20, 1, 0)
+		iconLbl.Position = UDim2.new(0, 8, 0, 0)
 		iconLbl.BackgroundTransparency = 1
 		iconLbl.Font = Enum.Font.GothamBold
 		iconLbl.TextSize = 13
 		iconLbl.TextColor3 = C.textDim
 		iconLbl.Text = icon or ""
-		iconLbl.LayoutOrder = 1
+		iconLbl.ZIndex = 5
 		iconLbl.Parent = btn
-
+		
+		-- [FIX] Text fills remaining width, left-aligned after icon
 		local textLbl = Instance.new("TextLabel")
-		-- [FIX] AutomaticSize X so label grows to fit text (was fixed 60px → text clipped)
-		textLbl.Size = UDim2.new(0, 50, 1, 0)
-		textLbl.AutomaticSize = Enum.AutomaticSize.X
+		textLbl.Size = UDim2.new(1, -34, 1, 0)
+		textLbl.Position = UDim2.new(0, 30, 0, 0)
 		textLbl.BackgroundTransparency = 1
 		textLbl.Font = Enum.Font.GothamBold
 		textLbl.TextSize = 12
 		textLbl.TextColor3 = C.textDim
+		textLbl.TextXAlignment = Enum.TextXAlignment.Left
 		textLbl.Text = name
-		textLbl.LayoutOrder = 2
+		textLbl.ZIndex = 5
 		textLbl.Parent = btn
 
 		local page = Instance.new("ScrollingFrame")
@@ -1719,6 +1722,8 @@ function Library:CreateWindow(cfg)
 			local state = tcfg.CurrentValue == true
 
 			local holder, hStroke = makeHolder(42)
+			-- [FIX] If toggle starts ON, outline the holder immediately
+			if state then hStroke.Color = C.accentDim end
 			local lbl = Instance.new("TextLabel")
 			lbl.Size = UDim2.new(1, -68, 1, 0)
 			lbl.Position = UDim2.new(0, 14, 0, 0)
