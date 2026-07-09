@@ -1,33 +1,64 @@
-# rayfield-ui-clone
+# 👑 RezurXLab — Rayfield UI Clone + DOMINUS Engine
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+A RezurXLab UI library (RezurXLib) with the same API surface as Rayfield, plus the DOMINUS V7 engine for Train to Fight.
 
-## Built with v0
+## 📦 Files
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+| File | Description |
+|------|-------------|
+| `RezurXLib.lua` | The UI library (ModuleScript). Janitor, shared drag router, Tween manager, themes, full component set. |
+| `DOMINUS_V7.luau` | DOMINUS V7 engine — loads RezurXLib from this repo, wires the full farm/noclip/chat/ESP engine. 1000 workers, math.huge, PVP Off default ON. |
+| `ExampleUsage.client.lua` | Example admin panel showing all RezurXLib components. |
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_E3cXVkTq9rLOyujsUu9uvnEmDay7)
+## 🚀 Quick Start (DOMINUS V7)
 
-## Getting Started
+Execute `DOMINUS_V7.luau` in your executor. It auto-loads RezurXLib from this repo's `main` branch.
 
-First, run the development server:
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/AshesOfTheUndead/rayfield-ui-clone/main/DOMINUS_V7.luau"))()
+```
+
+## 🎨 RezurXLib Features
+
+- **Janitor** — every connection captured, zero leaks on teardown
+- **Shared drag router** — ONE InputChanged/InputEnded pair for the whole script
+- **Tween manager** — per-instance-per-property cancel
+- **4 themes** — Ember (orange), Ocean (blue), Crimson (red), Slate (green)
+- **Components** — Button, Toggle, Slider, Dropdown, ColorPicker, Input, Keybind, Paragraph, Label, Divider, Section
+- **Window chrome** — drag (clamped), minimize (animated), close (fade contract), loading overlay
+- **Notifications** — slide-in, progress bar, type icons
+- **FPS + Ping** display
+- **Idempotent re-run** — destroys prior instance first
+
+## ⚡ DOMINUS V7 Engine
+
+- 1000 max workers (100 default)
+- `math.huge` train speed
+- 0.001s worker loop (no anti-cheat delays)
+- PVP Off default ON (0.2s aggressive spam, multiple area paths)
+- Adaptive throttle (FPS + gains trend based)
+- Overnight mode (5min work / 30s break cycles)
+- Turbo boost (2x / 10s, 5s cooldown)
+- V777 + Improved noclip (no upward glitch)
+- ESP with cached BillboardGuis
+- Chat bypass with RichText + color pickers
+- Save/Load profiles
+- Keyboard shortcuts (K, Ctrl+F, Ctrl+N, Ctrl+T)
+
+## 👑 Credits
+
+**Creator:** RezurXshin  
+**Studio:** RezurXLabs  
+**All rights reserved.** (c) 2026 RezurXshin.
+
+---
+
+## Next.js Project (v0)
+
+This repository also contains a Next.js project for the RezurXLab website.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+Open [http://localhost:3000](http://localhost:3000).
