@@ -677,6 +677,30 @@ function Library:CreateWindow(cfg)
 		Tween(minStroke, T20, { Color = C.border })
 	end)
 
+	-- MINIMIZE LOGIC
+	local minimized = false
+	local BODY_H_FULL = WIN_H - HEADER_H
+	minBtn.MouseButton1Click:Connect(function()
+		minimized = not minimized
+		if minimized then
+			tabBar.Visible = false
+			content.Visible = false
+			statusBar.Visible = false
+			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, HEADER_H) })
+			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, 0) })
+			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, HEADER_H + 36) })
+			Tween(minGlyph, T20, { Rotation = 180 })
+		else
+			tabBar.Visible = true
+			content.Visible = true
+			statusBar.Visible = true
+			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, WIN_H) })
+			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, BODY_H_FULL) })
+			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36) })
+			Tween(minGlyph, T20, { Rotation = 0 })
+		end
+	end)
+
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Text = "✕"
 	closeBtn.Size = UDim2.new(0, 30, 0, 28)
