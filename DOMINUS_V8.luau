@@ -627,32 +627,63 @@ end
 
 SysTab:CreateButton({Name = "💾 Save Profile", Callback = function()
     if not writefile then notify("❌ Error","writefile N/A",4,"error") return end
-    local ok, err = pcall(function() writefile(PROFILE_FILE, HttpService:JSONEncode(buildProfile())) end)
-    if ok then notify("💾 Saved","Profile saved to "..PROFILE_FILE,3,"success") else notify("❌ Save Failed", tostring(err):sub(1,60), 4, "error") end
+    local profile = buildProfile()
+    local json = HttpService:JSONEncode(profile)
+    local ok, err = pcall(function() writefile(PROFILE_FILE, json) end)
+    if ok then
+        notify("💾 Saved", "Wrote "..tostring(#json).." bytes to "..PROFILE_FILE, 4, "success")
+    else
+        notify("❌ Save Failed", tostring(err):sub(1,60), 4, "error")
+    end
 end})
 SysTab:CreateButton({Name = "📂 Load Profile", Callback = function()
     if not readfile then notify("❌ Error","readfile N/A",4,"error") return end
-    local ok,c = pcall(readfile, PROFILE_FILE)
-    if not ok or not c then notify("⚠️ No Profile","Save a profile first.",3,"warning") return end
-    local ok2,p = pcall(function() return HttpService:JSONDecode(c) end)
-    if not ok2 or type(p) ~= "table" then notify("❌ Error","Profile corrupted.",4,"error") return end
-    applyProfile(p)
-    notify("📂 Loaded","Profile applied to all settings.",3,"info")
+    local ok, c = pcall(readfile, PROFILE_FILE)
+    if not ok or not c or c == "" then
+        notify("⚠️ No Profile", "Save a profile first (file empty or missing)", 4, "warning")
+        return
+    end
+    local ok2, p = pcall(function() return HttpService:JSONDecode(c) end)
+    if not ok2 or type(p) ~= "table" then
+        notify("❌ Error", "Profile corrupted: "..tostring(p):sub(1,50), 4, "error")
+        return
+    end
+    -- [FIX] Wrap applyProfile in pcall so one error doesn't silently abort everything
+    local ok3, err3 = pcall(applyProfile, p)
+    if ok3 then
+        notify("📂 Loaded", "Profile applied ("..tostring(#c).." bytes)", 4, "info")
+    else
+        notify("❌ Load Error", tostring(err3):sub(1,60), 5, "error")
+    end
 end})
 SysTab:CreateButton({Name = "🗑️ Reset to Defaults", Callback = function()
-    applyProfile({
+    local ok, err = pcall(applyProfile, {
         CustomTag="", UserName="", TagColor={128,0,0}, UserColor={255,255,255}, MessageColor={255,255,255},
         FarmMode="Hybrid", FarmSpeedMul=1, WorkerCount=50, MaxPerformance=false,
         TrainSpeedValue="Infinity", AntiDetect=false, WalkSpeed=16, JumpPower=50,
         OverrideStats=false, NoclipMode="Improved", NoclipEnabled=false,
         AntiAfk=true, PvpOff=true,
     })
-    notify("🔄 Reset","All settings reset to defaults.",3,"info")
+    if ok then
+        notify("🔄 Reset", "All settings reset to defaults.", 3, "info")
+    else
+        notify("❌ Reset Error", tostring(err):sub(1,60), 5, "error")
+    end
 end})
 SysTab:CreateSection("❌ DANGER")
-local dc=false
+local dc = false
 SysTab:CreateButton({Name = "❌ Destroy UI (confirm)", Callback = function()
-    if dc then Lib:Destroy() else dc=true notify("⚠️ Confirm","Click again 3s",3,"warning") task.delay(3,function() dc=false end) end
+    if dc then
+        notify("❌ Destroying...", "UI will be removed.", 3, "warning")
+        task.delay(0.3, function()
+            local ok, err = pcall(function() Lib:Destroy() end)
+            if not ok then warn("[DOMINUS] Destroy error:", err) end
+        end)
+    else
+        dc = true
+        notify("⚠️ Confirm", "Click again within 5s to destroy UI", 5, "warning")
+        task.delay(5, function() dc = false end)
+    end
 end})
 
 -- ═══ TAB: About ═══
