@@ -304,8 +304,8 @@ function Library:CreateWindow(cfg)
 	local loadingTitle = cfg.LoadingTitle or windowName
 	local loadingOn    = cfg.LoadingEnabled ~= false
 	local toggleKey    = cfg.ToggleUIKeybind or Enum.KeyCode.K
-	local WIN_W        = (cfg.Size and cfg.Size.X) or 470
-	local WIN_H        = (cfg.Size and cfg.Size.Y) or 490
+	local WIN_W        = (cfg.Size and cfg.Size.X) or 400  -- smaller default for mobile
+	local WIN_H        = (cfg.Size and cfg.Size.Y) or 420  -- smaller default for mobile
 
 	-- ------------------------------------------------------------
 	-- IDEMPOTENT GUARD — keyed to THIS window's name, so re-running
@@ -1275,7 +1275,7 @@ function Library:CreateWindow(cfg)
 		btn.ZIndex = 4
 		btn.Parent = tabBar
 		corner(btn, R.tab)
-		local chipStroke = stroke(btn, C.border, 1)
+		local chipStroke = stroke(btn, C.borderAcc, 1)
 
 		local rowLayout = Instance.new("UIListLayout")
 		rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -1296,8 +1296,8 @@ function Library:CreateWindow(cfg)
 		iconLbl.Parent = btn
 
 		local textLbl = Instance.new("TextLabel")
-		textLbl.Size = UDim2.new(0, 0, 1, 0)
-		textLbl.AutomaticSize = Enum.AutomaticSize.None
+		textLbl.Size = UDim2.new(0, 60, 1, 0)  -- fixed width so text is visible
+			textLbl.AutomaticSize = Enum.AutomaticSize.None  -- disabled
 		textLbl.BackgroundTransparency = 1
 		textLbl.Font = Enum.Font.GothamBold
 		textLbl.TextSize = 12
@@ -1330,12 +1330,14 @@ function Library:CreateWindow(cfg)
 		tab.Btn = btn
 		tab.Name = name
 
-		local function updateBtnSize()
-			local w = iconLbl.AbsoluteSize.X + textLbl.TextBounds.X + (icon and 5 or 0) + 24
-			btn.Size = UDim2.new(0, w, 1, -10)
-			if ActiveTab == tab then
-				moveIndicatorTo(btn, false)
-			end
+			local function updateBtnSize()
+				local textW = textLbl.TextBounds.X > 0 and textLbl.TextBounds.X or 50
+				local iconW = icon and 16 or 0
+				local w = math.max(textW + iconW + (icon and 5 or 0) + 24, 60)
+				btn.Size = UDim2.new(0, w, 1, -10)
+				if ActiveTab == tab then
+					moveIndicatorTo(btn, false)
+				end
 		end
 		textLbl:GetPropertyChangedSignal("TextBounds"):Connect(updateBtnSize)
 		updateBtnSize()
@@ -1346,8 +1348,8 @@ function Library:CreateWindow(cfg)
 				local prev = ActiveTab
 				prev.Page.Visible = false
 				prev.Btn.BackgroundTransparency = 0
-				Tween(prev.Btn, T20, { BackgroundColor3 = C.tabChip })
-				Tween(prev._chipStroke, T20, { Color = C.border, Transparency = 0 })
+				Tween(prev.Btn, T20, { BackgroundColor3 = C.tabChip })  -- inactive bg
+				Tween(prev._chipStroke, T20, { Color = C.borderAcc, Transparency = 0 })  -- orange outline
 				Tween(prev._iconLbl, T20, { TextColor3 = C.textDim, Rotation = 0 })
 				Tween(prev._textLbl, T20, { TextColor3 = C.textDim })
 			end
@@ -1387,8 +1389,8 @@ function Library:CreateWindow(cfg)
 
 		btn.MouseEnter:Connect(function()
 			if ActiveTab ~= tab then
-				Tween(btn, T10, { BackgroundColor3 = C.tabChipHov })
-				Tween(chipStroke, T10, { Color = C.accentDim })
+				Tween(btn, T10, { BackgroundColor3 = C.tabChipHov })  -- hover
+				Tween(chipStroke, T10, { Color = C.accentDim })  -- hover orange
 				Tween(iconLbl, T10, { TextColor3 = C.text })
 				Tween(textLbl, T10, { TextColor3 = C.text })
 				Tween(btn, TPRESS, { Position = UDim2.new(0, btn.Position.X.Offset, 0, 4) })
@@ -2491,12 +2493,12 @@ function Library:CreateWindow(cfg)
 					swatch.BackgroundColor3 = obj.Color
 					preview.BackgroundColor3 = obj.Color
 					pad.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-				pointer.Position = UDim2.new(s, 0, 1 - v, 0)
-				hueKnob.Position = UDim2.new(h, 0, 0.5, 0)
-				local r2, g2, b2 = math.floor(obj.Color.R * 255 + 0.5), math.floor(obj.Color.G * 255 + 0.5), math.floor(obj.Color.B * 255 + 0.5)
-				hexLbl.Text = string.format("#%02X%02X%02X", r2, g2, b2)
-				if callback then pcall(callback, obj.Color) end
-				end
+					pointer.Position = UDim2.new(s, 0, 1 - v, 0)
+					hueKnob.Position = UDim2.new(h, 0, 0.5, 0)
+					local r2, g2, b2 = math.floor(obj.Color.R * 255 + 0.5), math.floor(obj.Color.G * 255 + 0.5), math.floor(obj.Color.B * 255 + 0.5)
+					hexLbl.Text = string.format("#%02X%02X%02X", r2, g2, b2)
+					if callback then pcall(callback, obj.Color) end
+					end
 				update()
 
 				-- Pad drag — uses InputBegan for mouse+touch support
