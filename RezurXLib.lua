@@ -3,7 +3,7 @@
 --
 -- A callable UI library with the same API surface as Rayfield
 -- (CreateWindow -> Window:CreateTab -> Tab:CreateButton({...}),
--- Window/Library:Notify, Flags, themes, functional keybinds,
+-- Window/Library, Flags, themes, functional keybinds,
 -- multi-select dropdowns) but wearing the RezurXlab Admin Panel
 -- visual language: aurora header, sliding tab-pill indicator,
 -- glow strip shimmer, chip tabs, status bar.
@@ -190,7 +190,7 @@ function Janitor.new()
 	return setmetatable({ _items = {}, _n = 0 }, Janitor)
 end
 function Janitor:Add(obj, method)
-	self._n += 1
+	self._n = self._n + 1
 	self._items[self._n] = { obj = obj, method = method or "Disconnect" }
 	return obj
 end

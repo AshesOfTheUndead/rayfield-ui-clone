@@ -372,7 +372,7 @@ local Window = Lib:CreateWindow({
     LoadingEnabled = false,  -- [FIX] disable loading overlay — was causing delays
     Theme = "Ember",
     ToggleUIKeybind = Enum.KeyCode.K,
-    Size = Vector2.new(420, 440),  -- [FIX] smaller window (was 470x490 default)
+    Size = Vector2.new(380, 420),  -- [FIX] smaller for mobile (was 420x440)
 })
 
 notify = function(title, body, duration, ntype)
