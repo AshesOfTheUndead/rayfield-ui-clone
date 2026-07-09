@@ -2120,8 +2120,11 @@ function Library:CreateWindow(cfg)
 
 			local obj = { CurrentKeybind = bound }
 
-			local function stopListening(newKey)
-				listening = false
+				local rebindCatcher = nil  -- set when rebind mode starts
+
+				local function stopListening(newKey)
+					listening = false
+					if rebindCatcher then rebindCatcher:Destroy() rebindCatcher = nil end
 				if newKey ~= nil then
 					bound = newKey
 					obj.CurrentKeybind = bound
@@ -2150,6 +2153,18 @@ function Library:CreateWindow(cfg)
 				keyLbl.Text = "..."
 				Tween(pill, T15, { BackgroundColor3 = C.panelHov })
 				Tween(pillStroke, T15, { Color = C.accent, Thickness = 1.5 })
+				-- Catcher: clicking outside the pill cancels rebind
+				rebindCatcher = Instance.new("TextButton")
+				rebindCatcher.Size = UDim2.new(1, 0, 1, 0)
+				rebindCatcher.BackgroundTransparency = 1
+				rebindCatcher.Text = ""
+				rebindCatcher.AutoButtonColor = false
+				rebindCatcher.Active = true
+				rebindCatcher.ZIndex = 1000
+				rebindCatcher.Parent = screenGui
+				rebindCatcher.MouseButton1Click:Connect(function()
+					stopListening(nil)
+				end)
 			end)
 
 			WindowJanitor:Add(UserInputService.InputBegan:Connect(function(inp, gp)
@@ -2452,9 +2467,9 @@ function Library:CreateWindow(cfg)
 			return obj
 		end
 
-		-- Short-form aliases stored in a separate table to avoid
-		-- overwriting the CreateXxx methods on the tab object itself.
-		tab.aliases = {
+		-- Short-form aliases via metatable proxy — both tab:CreateButton(...)
+		-- and tab.Button(...) work without collision.
+		local aliases = {
 			Label = function(_, text) return tab:CreateSection(text) end,
 			Divider = function(_, text) return tab:CreateDivider(text) end,
 			Button = function(_, n, cb) return tab:CreateButton({ Name = n, Callback = cb }) end,
@@ -2470,8 +2485,15 @@ function Library:CreateWindow(cfg)
 			Paragraph = function(_, t, c) return tab:CreateParagraph({ Title = t, Content = c }) end,
 			Keybind = function(_, n, k, cb) return tab:CreateKeybind({ Name = n, CurrentKeybind = k, Callback = cb }) end,
 		}
-
-		return tab
+		local wrapper = setmetatable({}, {
+			__index = function(_, k)
+				return aliases[k] or tab[k]
+			end,
+			__newindex = function(_, k, v)
+				tab[k] = v
+			end,
+		})
+		return wrapper
 	end
 
 	-- ------------------------------------------------------------
