@@ -304,8 +304,10 @@ function Library:CreateWindow(cfg)
 	local loadingTitle = cfg.LoadingTitle or windowName
 	local loadingOn    = cfg.LoadingEnabled ~= false
 	local toggleKey    = cfg.ToggleUIKeybind or Enum.KeyCode.K
-	local WIN_W        = (cfg.Size and cfg.Size.X) or 320  -- mobile-first (fits 360px phones)
-	local WIN_H        = (cfg.Size and cfg.Size.Y) or 380  -- mobile-first
+	local WIN_W        = (cfg.Size and cfg.Size.X) or 420  -- bigger (was 320, text was cramped)
+	local WIN_H        = (cfg.Size and cfg.Size.Y) or 480  -- bigger (was 380)
+	local MIN_W, MIN_H = 300, 360  -- minimum resizable size
+	local MAX_W, MAX_H = 900, 900  -- maximum resizable size
 
 	-- ------------------------------------------------------------
 	-- IDEMPOTENT GUARD — keyed to THIS window's name, so re-running
@@ -405,7 +407,7 @@ function Library:CreateWindow(cfg)
 		local scaleX = (vp.X - 16) / WIN_W
 		local scaleY = (vp.Y - 120) / WIN_H
 		-- Allow shrinking down to 0.35 on small phones (was 0.5 — too big)
-		local scale = math.clamp(math.min(scaleX, scaleY), 0.4, 1.0)
+		local scale = math.clamp(math.min(scaleX, scaleY), 0.5, 1.0)  -- [FIX] floor 0.5 (was 0.4)
 		if screenGui:FindFirstChild("UIScale") then
 			screenGui.UIScale.Scale = scale
 		end
@@ -704,7 +706,6 @@ function Library:CreateWindow(cfg)
 
 	-- MINIMIZE LOGIC
 	local minimized = false
-	local BODY_H_FULL = WIN_H - HEADER_H
 	minBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized
 		if minimized then
@@ -719,8 +720,9 @@ function Library:CreateWindow(cfg)
 			tabBar.Visible = true
 			content.Visible = true
 			statusBar.Visible = true
+			-- [FIX] recompute body height from current WIN_H (supports resize)
 			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, WIN_H) })
-			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, BODY_H_FULL) })
+			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, WIN_H - HEADER_H) })
 			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36) })
 			Tween(minGlyph, T20, { Rotation = 0 })
 		end
@@ -990,6 +992,83 @@ function Library:CreateWindow(cfg)
 	onTheme(function()
 		Tween(sTxt, T20, { TextColor3 = C.muted })
 		Tween(sVer, T20, { TextColor3 = C.muted })
+	end)
+
+	-- [FIX] Make status bar draggable (move window from bottom too)
+	WindowJanitor:Add(statusBar.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1
+			or inp.UserInputType == Enum.UserInputType.Touch then
+		local dragStart = inp.Position
+		local startPos = frame.Position
+		Tween(shadow, T15, { BackgroundTransparency = 0.65 })
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+		registerDrag("statusbar", function(pos)
+			local d = pos - dragStart
+			local nx = math.clamp(startPos.X.Offset + d.X, -WIN_W + 100, vp.X - 100)
+			local ny = math.clamp(startPos.Y.Offset + d.Y, 0, vp.Y - 30)
+			frame.Position = UDim2.new(0, nx, 0, ny)
+			shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
+		end, function()
+			Tween(shadow, T15, { BackgroundTransparency = 0.52 })
+		end)
+		end
+	end))
+
+	-- [FIX] Resize handle (bottom-right corner) — drag to resize window
+	local resizeHandle = Instance.new("TextButton")
+	resizeHandle.Name = "ResizeHandle"
+	resizeHandle.Size = UDim2.new(0, 22, 0, 22)
+	resizeHandle.Position = UDim2.new(1, -22, 1, -22)
+	resizeHandle.BackgroundColor3 = C.panelAlt
+	resizeHandle.BackgroundTransparency = 0.3
+	resizeHandle.Text = "⇲"
+	resizeHandle.TextColor3 = C.muted
+	resizeHandle.Font = Enum.Font.GothamBold
+	resizeHandle.TextSize = 12
+	resizeHandle.AutoButtonColor = false
+	resizeHandle.BorderSizePixel = 0
+	resizeHandle.ZIndex = 8
+	resizeHandle.Parent = frame
+	corner(resizeHandle, R.small)
+	local resizeStroke = stroke(resizeHandle, C.border, 1)
+	resizeHandle.MouseEnter:Connect(function()
+		Tween(resizeHandle, T10, { BackgroundColor3 = C.panelHov, BackgroundTransparency = 0.1 })
+		Tween(resizeHandle, T10, { TextColor3 = C.accent })
+	end)
+	resizeHandle.MouseLeave:Connect(function()
+		Tween(resizeHandle, T10, { BackgroundColor3 = C.panelAlt, BackgroundTransparency = 0.3 })
+		Tween(resizeHandle, T10, { TextColor3 = C.muted })
+	end)
+	WindowJanitor:Add(resizeHandle.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1
+			or inp.UserInputType == Enum.UserInputType.Touch then
+		-- Lock top-left corner: record it in absolute pixels, resize from there
+		local topLeft = frame.AbsolutePosition
+		local dragStart = inp.Position
+		local startW, startH = WIN_W, WIN_H
+		Tween(shadow, T15, { BackgroundTransparency = 0.65 })
+		registerDrag("resize", function(pos)
+			local d = pos - dragStart
+			local newW = math.clamp(startW + d.X, MIN_W, MAX_W)
+			local newH = math.clamp(startH + d.Y, MIN_H, MAX_H)
+			WIN_W = newW
+			WIN_H = newH
+			frame.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y)
+			frame.Size = UDim2.new(0, newW, 0, newH)
+			shadow.Position = UDim2.new(0, topLeft.X - 18, 0, topLeft.Y - 18)
+			shadow.Size = UDim2.new(0, newW + 36, 0, newH + 36)
+			if not minimized then
+				body.Size = UDim2.new(1, 0, 0, newH - HEADER_H)
+			end
+			updateScale()
+		end, function()
+			Tween(shadow, T15, { BackgroundTransparency = 0.52 })
+		end)
+		end
+	end))
+	onTheme(function()
+		Tween(resizeHandle, T20, { BackgroundColor3 = C.panelAlt })
+		Tween(resizeStroke, T20, { Color = C.border })
 	end)
 
 	-- ------------------------------------------------------------
@@ -1328,10 +1407,10 @@ function Library:CreateWindow(cfg)
 		page.Parent = content
 
 		local pLayout = Instance.new("UIListLayout")
-		pLayout.Padding = UDim.new(0, 6)
+		pLayout.Padding = UDim.new(0, 8)  -- [FIX] 8px between items (was 6, cramped)
 		pLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		pLayout.Parent = page
-		pad(page, 10, 10, 9, 10)
+		pad(page, 12, 12, 11, 12)  -- [FIX] 12px page padding (was 10)
 		pLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 			page.CanvasSize = UDim2.new(0, 0, 0, pLayout.AbsoluteContentSize.Y + 20)
 		end)
