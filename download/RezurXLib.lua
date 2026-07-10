@@ -671,8 +671,8 @@ function Library:CreateWindow(cfg)
 	-- MINIMIZE + HIDE buttons
 	local minBtn = Instance.new("TextButton")
 	minBtn.Text = ""
-	minBtn.Size = UDim2.new(0, 30, 0, 28)
-	minBtn.Position = UDim2.new(1, -74, 0.5, -14)
+	minBtn.Size = UDim2.new(0, 38, 0, 32)
+	minBtn.Position = UDim2.new(1, -86, 0.5, -14)
 	minBtn.BackgroundColor3 = C.panelAlt
 	minBtn.BorderSizePixel = 0
 	minBtn.AutoButtonColor = false
@@ -706,7 +706,7 @@ function Library:CreateWindow(cfg)
 
 	-- MINIMIZE LOGIC
 	local minimized = false
-	minBtn.MouseButton1Click:Connect(function()
+	minBtn.Activated:Connect(function()
 		minimized = not minimized
 		if minimized then
 			tabBar.Visible = false
@@ -730,8 +730,8 @@ function Library:CreateWindow(cfg)
 
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Text = "✕"
-	closeBtn.Size = UDim2.new(0, 30, 0, 28)
-	closeBtn.Position = UDim2.new(1, -38, 0.5, -14)
+	closeBtn.Size = UDim2.new(0, 38, 0, 32)
+	closeBtn.Position = UDim2.new(1, -44, 0.5, -14)
 	closeBtn.BackgroundColor3 = C.red
 	closeBtn.TextColor3 = C.white
 	closeBtn.TextSize = 12
@@ -751,7 +751,7 @@ function Library:CreateWindow(cfg)
 	-- ═══ FLOATING RESTORE ICON ═══
 	local floatIcon = Instance.new("TextButton")
 	floatIcon.Name = "FloatIcon"
-	floatIcon.Size = UDim2.new(0, 44, 0, 44)
+	floatIcon.Size = UDim2.new(0, 52, 0, 52)
 	floatIcon.Position = UDim2.new(0, 10, 0, 10)
 	floatIcon.BackgroundColor3 = C.accent
 	floatIcon.Text = "👑"
@@ -794,46 +794,46 @@ function Library:CreateWindow(cfg)
 		end
 	end)
 
-        -- ------------------------------------------------------------
-        -- WINDOW DRAG (via shared drag router)
-        -- [FIX] Use dedicated dragBar instead of header.InputBegan
-        -- to prevent drag from firing when clicking minBtn/closeBtn
-        -- ------------------------------------------------------------
-        local dragBar = Instance.new("TextButton")
-        dragBar.Name = "DragBar"
-        dragBar.Size = UDim2.new(1, -80, 1, 0)
-        dragBar.Position = UDim2.new(0, 0, 0, 0)
-        dragBar.BackgroundTransparency = 1
-        dragBar.Text = ""
-        dragBar.AutoButtonColor = false
-        dragBar.BorderSizePixel = 0
-        -- [FIX] ZIndex 6 = above logoGlow(4), statFrame(5), logo(5), subLbl(5)
-        -- but dragBar ends 80px before right edge, so minBtn/closeBtn stay tappable
-        dragBar.ZIndex = 6
-        dragBar.Active = true
-        dragBar.Selectable = false
-        dragBar.Parent = header
+	-- ------------------------------------------------------------
+	-- WINDOW DRAG (via shared drag router)
+	-- [FIX] Use dedicated dragBar instead of header.InputBegan
+	-- to prevent drag from firing when clicking minBtn/closeBtn
+	-- ------------------------------------------------------------
+	local dragBar = Instance.new("TextButton")
+	dragBar.Name = "DragBar"
+	dragBar.Size = UDim2.new(1, -96, 1, 0)
+	dragBar.Position = UDim2.new(0, 0, 0, 0)
+	dragBar.BackgroundTransparency = 1
+	dragBar.Text = ""
+	dragBar.AutoButtonColor = false
+	dragBar.BorderSizePixel = 0
+	-- [FIX] ZIndex 6 = above logoGlow(4), statFrame(5), logo(5), subLbl(5)
+	-- but dragBar ends 80px before right edge, so minBtn/closeBtn stay tappable
+	dragBar.ZIndex = 6
+	dragBar.Active = true
+	dragBar.Selectable = false
+	dragBar.Parent = header
 
-        WindowJanitor:Add(dragBar.InputBegan:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.MouseButton1
-                        or inp.UserInputType == Enum.UserInputType.Touch then
-                        local dragStart = inp.Position
-                        -- [FIX] Use AbsolutePosition (screen pixels) not Position.Offset
-                        -- Position has scale 0.5/0.55, .Offset gives -WIN_W/2 → flinging
-                        local startAbs = frame.AbsolutePosition
-                        Tween(shadow, T15, { BackgroundTransparency = 0.65 })
-                        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-                        registerDrag("window", function(pos)
-                                local d = pos - dragStart
-                                local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
-                                local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
-                                frame.Position = UDim2.new(0, nx, 0, ny)
-                                shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
-                        end, function()
-                                Tween(shadow, T15, { BackgroundTransparency = 0.52 })
-                        end)
-                end
-        end))
+	WindowJanitor:Add(dragBar.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1
+			or inp.UserInputType == Enum.UserInputType.Touch then
+			local dragStart = inp.Position
+			-- [FIX] Use AbsolutePosition (screen pixels) not Position.Offset
+			-- Position has scale 0.5/0.55, .Offset gives -WIN_W/2 → flinging
+			local startAbs = frame.AbsolutePosition
+			Tween(shadow, T15, { BackgroundTransparency = 0.65 })
+			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+			registerDrag("window", function(pos)
+				local d = pos - dragStart
+				local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
+				local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
+				frame.Position = UDim2.new(0, nx, 0, ny)
+				shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
+			end, function()
+				Tween(shadow, T15, { BackgroundTransparency = 0.52 })
+			end)
+		end
+	end))
 
 	-- ------------------------------------------------------------
 	-- TAB BAR + SLIDING INDICATOR
@@ -1222,7 +1222,7 @@ function Library:CreateWindow(cfg)
 		frame.Visible = not h
 		shadow.Visible = not h
 	end
-	closeBtn.MouseButton1Click:Connect(function()
+	closeBtn.Activated:Connect(function()
 		closeCurrentPopup()
 		frame.Visible = false
 		shadow.Visible = false
@@ -1360,43 +1360,24 @@ function Library:CreateWindow(cfg)
 
 		local btn = Instance.new("TextButton")
 		btn.Name = "TabChip"
-		-- [FIX] Fixed width, no AutomaticSize, no UIListLayout.
-		-- AutomaticSize + UIListLayout caused circular layout → 0-size → blank tabs.
-		btn.Size = UDim2.new(0, 88, 1, -10)
+		-- [FIX] Use btn.Text directly for icon+text (Sirius/Rayfield style).
+		-- Child labels had rendering issues on some devices → blank tabs.
+		btn.Size = UDim2.new(0, 90, 1, -10)
 		btn.Position = UDim2.new(0, 0, 0, 5)
 		btn.BackgroundColor3 = C.tabChip
 		btn.AutoButtonColor = false
 		btn.BorderSizePixel = 0
-		btn.Text = ""
+		btn.Text = (icon or "") .. "  " .. name
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 12
+		btn.TextColor3 = C.textDim
 		btn.ZIndex = 4
 		btn.Parent = tabBar
 		corner(btn, R.tab)
 		local chipStroke = stroke(btn, C.borderAcc, 1)
-		
-		-- [FIX] Icon at fixed position (left, 8px margin)
-		local iconLbl = Instance.new("TextLabel")
-		iconLbl.Size = UDim2.new(0, 20, 1, 0)
-		iconLbl.Position = UDim2.new(0, 8, 0, 0)
-		iconLbl.BackgroundTransparency = 1
-		iconLbl.Font = Enum.Font.GothamBold
-		iconLbl.TextSize = 13
-		iconLbl.TextColor3 = C.textDim
-		iconLbl.Text = icon or ""
-		iconLbl.ZIndex = 5
-		iconLbl.Parent = btn
-		
-		-- [FIX] Text fills remaining width, left-aligned after icon
-		local textLbl = Instance.new("TextLabel")
-		textLbl.Size = UDim2.new(1, -34, 1, 0)
-		textLbl.Position = UDim2.new(0, 30, 0, 0)
-		textLbl.BackgroundTransparency = 1
-		textLbl.Font = Enum.Font.GothamBold
-		textLbl.TextSize = 12
-		textLbl.TextColor3 = C.textDim
-		textLbl.TextXAlignment = Enum.TextXAlignment.Left
-		textLbl.Text = name
-		textLbl.ZIndex = 5
-		textLbl.Parent = btn
+		-- Keep refs for setActive color tweens
+		local iconLbl = btn  -- alias so setActive code works
+		local textLbl = btn  -- alias so setActive code works
 
 		local page = Instance.new("ScrollingFrame")
 		page.Size = UDim2.new(1, 0, 1, 0)
@@ -1436,26 +1417,18 @@ function Library:CreateWindow(cfg)
 				local prev = ActiveTab
 				prev.Page.Visible = false
 				prev.Btn.BackgroundTransparency = 0
-				Tween(prev.Btn, T20, { BackgroundColor3 = C.tabChip })  -- inactive bg
-				Tween(prev._chipStroke, T20, { Color = C.borderAcc, Transparency = 0 })  -- orange outline
-				Tween(prev._iconLbl, T20, { TextColor3 = C.textDim, Rotation = 0 })
-				Tween(prev._textLbl, T20, { TextColor3 = C.textDim })
+				Tween(prev.Btn, T20, { BackgroundColor3 = C.tabChip })
+				Tween(prev._chipStroke, T20, { Color = C.borderAcc, Transparency = 0 })
+				Tween(prev._iconLbl, T20, { TextColor3 = C.textDim })
 			end
 			ActiveTab = tab
 			tab.Page.Visible = true
 			Tween(btn, T20, { BackgroundTransparency = 1 })
 			Tween(chipStroke, T20, { Transparency = 1 })
 			Tween(iconLbl, T20, { TextColor3 = C.accentHi })
-			Tween(textLbl, T20, { TextColor3 = C.accentHi })
 			moveIndicatorTo(btn, not skipAnim)
-
-			iconLbl.Rotation = -8
-			local popTween = Tween(iconLbl, TPOP, { TextSize = 15, Rotation = 0 })
-			if popTween then
-				popTween.Completed:Connect(function()
-					Tween(iconLbl, T15, { TextSize = 13 })
-				end)
-			end
+			-- [FIX] Removed rotation/pop animation (was for separate icon label,
+			-- now iconLbl=btn so rotating would rotate the whole button)
 		end
 		tab._chipStroke = chipStroke
 		tab._iconLbl = iconLbl
@@ -1465,33 +1438,27 @@ function Library:CreateWindow(cfg)
 		onTheme(function()
 			page.ScrollBarImageColor3 = C.accent
 			if ActiveTab == tab then
-				Tween(iconLbl, T20, { TextColor3 = C.accentHi })
-				Tween(textLbl, T20, { TextColor3 = C.accentHi })
+				Tween(btn, T20, { TextColor3 = C.accentHi })
 			else
 				Tween(btn, T20, { BackgroundColor3 = C.tabChip })
-				Tween(chipStroke, T20, { Color = C.border })
-				Tween(iconLbl, T20, { TextColor3 = C.textDim })
-				Tween(textLbl, T20, { TextColor3 = C.textDim })
+				Tween(chipStroke, T20, { Color = C.borderAcc })
+				Tween(btn, T20, { TextColor3 = C.textDim })
 			end
 		end)
 
 		btn.MouseEnter:Connect(function()
 			if ActiveTab ~= tab then
-				Tween(btn, T10, { BackgroundColor3 = C.tabChipHov })  -- hover
-				Tween(chipStroke, T10, { Color = C.accentDim })  -- hover orange
-				Tween(iconLbl, T10, { TextColor3 = C.text })
-				Tween(textLbl, T10, { TextColor3 = C.text })
-				Tween(btn, TPRESS, { Position = UDim2.new(0, btn.Position.X.Offset, 0, 4) })
+				Tween(btn, T10, { BackgroundColor3 = C.tabChipHov })
+				Tween(chipStroke, T10, { Color = C.accentDim })
+				Tween(btn, T10, { TextColor3 = C.text })
 			end
 		end)
 		btn.MouseLeave:Connect(function()
 			if ActiveTab ~= tab then
 				Tween(btn, T10, { BackgroundColor3 = C.tabChip })
-				Tween(chipStroke, T10, { Color = C.border })
-				Tween(iconLbl, T10, { TextColor3 = C.textDim })
-				Tween(textLbl, T10, { TextColor3 = C.textDim })
+				Tween(chipStroke, T10, { Color = C.borderAcc })
+				Tween(btn, T10, { TextColor3 = C.textDim })
 			end
-			Tween(btn, TPRESS, { Position = UDim2.new(0, btn.Position.X.Offset, 0, 5) })
 		end)
 		btn.MouseButton1Click:Connect(function()
 			ripple(btn, btn.AbsoluteSize.X / 2, btn.AbsoluteSize.Y / 2, C.accent)
@@ -2096,6 +2063,11 @@ function Library:CreateWindow(cfg)
 					catcher.Parent = screenGui
 
 					local hPos, hSize = holder.AbsolutePosition, holder.AbsoluteSize
+					-- [FIX] Account for UIScale — AbsolutePosition is already scaled,
+					-- but popup is in screenGui which scales AGAIN. Divide by scale.
+					local _uiScale = screenGui:FindFirstChild("UIScale")
+					local _s = _uiScale and _uiScale.Scale or 1
+					if _s > 0 then hPos = Vector2.new(hPos.X / _s, hPos.Y / _s) hSize = Vector2.new(hSize.X / _s, hSize.Y / _s) end
 					local ITEM_H = 30
 					local LIST_H = math.min(#options, 7) * (ITEM_H + 2) + 10
 					local cam = workspace.CurrentCamera
