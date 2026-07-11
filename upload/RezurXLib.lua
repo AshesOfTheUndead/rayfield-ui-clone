@@ -35,6 +35,7 @@ local TweenService     = game:GetService("TweenService")
 local RunService       = game:GetService("RunService")
 local Stats            = game:GetService("Stats")
 local CoreGui          = game:GetService("CoreGui")
+local TextService      = game:GetService("TextService")
 
 local player    = Players.LocalPlayer
 local playerGui = player and player:WaitForChild("PlayerGui")
@@ -442,6 +443,23 @@ function Library:CreateWindow(cfg)
 	shadow.Parent = screenGui
 	corner(shadow, R.outer + 8)
 
+	-- Faint accent-tinted ambient glow, wider than the shadow and mostly
+	-- transparent — gives the window a bit of branded "premium" presence
+	-- instead of sitting on a purely neutral gray shadow.
+	local ambientGlow = Instance.new("Frame")
+	ambientGlow.Name = "AmbientGlow"
+	ambientGlow.Size = UDim2.new(0, WIN_W + 70, 0, WIN_H + 70)
+	ambientGlow.Position = UDim2.new(0.5, -(WIN_W + 70) / 2, 0.55, -(WIN_H + 70) / 2)
+	ambientGlow.BackgroundColor3 = C.accent
+	ambientGlow.BackgroundTransparency = 0.93
+	ambientGlow.BorderSizePixel = 0
+	ambientGlow.ZIndex = 1
+	ambientGlow.Parent = screenGui
+	corner(ambientGlow, R.outer + 16)
+	onTheme(function()
+		Tween(ambientGlow, T20, { BackgroundColor3 = C.accent })
+	end)
+
 	local frame = Instance.new("Frame")
 	frame.Name = "Window"
 	frame.Size = UDim2.new(0, WIN_W, 0, WIN_H)
@@ -452,10 +470,11 @@ function Library:CreateWindow(cfg)
 	frame.ZIndex = 2
 	frame.Parent = screenGui
 	corner(frame, R.outer)
-	local frameStroke = stroke(frame, C.border, 1.5)
+	local frameStroke = stroke(frame, C.borderAcc, 1.5)
+	frameStroke.Transparency = 0.55
 	onTheme(function()
 		Tween(frame, T20, { BackgroundColor3 = C.bg })
-		Tween(frameStroke, T20, { Color = C.border })
+		Tween(frameStroke, T20, { Color = C.borderAcc })
 	end)
 
 	local body = Instance.new("Frame")
@@ -709,48 +728,72 @@ function Library:CreateWindow(cfg)
 		Tween(minStroke, T20, { Color = C.border })
 	end)
 
-	-- MINIMIZE LOGIC
-	local minimized = false
-	minBtn.Activated:Connect(function()
-		minimized = not minimized
-		if minimized then
-			tabBar.Visible = false
-			content.Visible = false
-			statusBar.Visible = false
-			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, HEADER_H) })
-			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, 0) })
-			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, HEADER_H + 36) })
-			Tween(minGlyph, T20, { Rotation = 180 })
-		else
-			tabBar.Visible = true
-			content.Visible = true
-			statusBar.Visible = true
-			-- [FIX] recompute body height from current WIN_H (supports resize)
-			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, WIN_H) })
-			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, WIN_H - HEADER_H) })
-			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36) })
-			Tween(minGlyph, T20, { Rotation = 0 })
-		end
-	end)
+	-- MINIMIZE LOGIC moved below — it references tabBar/content/statusBar,
+	-- which aren't created until later in this function. Wiring
+	-- minBtn.Activated here referenced them as nil globals instead of
+	-- upvalues; clicking minimize threw silently (visible in the dev
+	-- console, invisible to the player) and did nothing. See the
+	-- consolidated HIDE / SHOW / MINIMIZE / TOGGLE KEYBIND section.
 
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Text = "✕"
+	closeBtn.Text = ""
 	closeBtn.Size = UDim2.new(0, 38, 0, 32)
 	closeBtn.Position = UDim2.new(1, -44, 0.5, -14)
-	closeBtn.BackgroundColor3 = C.red
-	closeBtn.TextColor3 = C.white
-	closeBtn.TextSize = 12
-	closeBtn.Font = Enum.Font.GothamBold
+	closeBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = header
 	corner(closeBtn, R.small)
+	local closeStroke = stroke(closeBtn, Color3.fromRGB(160, 50, 50), 1)
+	local closeGrad = gradient(closeBtn, ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 40, 40)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(95, 22, 22)),
+	}), 90)
+
+	-- soft glow ring behind the button, only visible on hover
+	local closeGlow = Instance.new("Frame")
+	closeGlow.Size = UDim2.new(1, 14, 1, 14)
+	closeGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+	closeGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+	closeGlow.BackgroundColor3 = C.red
+	closeGlow.BackgroundTransparency = 1
+	closeGlow.BorderSizePixel = 0
+	closeGlow.ZIndex = 4
+	closeGlow.Parent = header
+	corner(closeGlow, R.small + 4)
+
+	-- line-drawn X (two crossed bars) instead of a text glyph — matches
+	-- minGlyph's visual language rather than mixing fonts/weights
+	local xBar1 = Instance.new("Frame")
+	xBar1.Size = UDim2.new(0, 13, 0, 2)
+	xBar1.AnchorPoint = Vector2.new(0.5, 0.5)
+	xBar1.Position = UDim2.new(0.5, 0, 0.5, 0)
+	xBar1.Rotation = 45
+	xBar1.BackgroundColor3 = C.white
+	xBar1.BorderSizePixel = 0
+	xBar1.ZIndex = 6
+	xBar1.Parent = closeBtn
+	corner(xBar1, UDim.new(1, 0))
+	local xBar2 = xBar1:Clone()
+	xBar2.Rotation = -45
+	xBar2.Parent = closeBtn
+
 	closeBtn.MouseEnter:Connect(function()
-		Tween(closeBtn, T10, { BackgroundColor3 = Color3.fromRGB(238, 68, 68) })
+		Tween(closeBtn, T10, { BackgroundColor3 = Color3.fromRGB(210, 55, 55) })
+		Tween(closeStroke, T10, { Color = Color3.fromRGB(255, 120, 120) })
+		Tween(closeGlow, T15, { BackgroundTransparency = 0.75 })
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		Tween(closeBtn, T10, { BackgroundColor3 = C.red })
+		Tween(closeBtn, T10, { BackgroundColor3 = Color3.fromRGB(120, 30, 30) })
+		Tween(closeStroke, T10, { Color = Color3.fromRGB(160, 50, 50) })
+		Tween(closeGlow, T15, { BackgroundTransparency = 1 })
+	end)
+	closeBtn.MouseButton1Down:Connect(function()
+		Tween(closeBtn, TPRESS, { Size = UDim2.new(0, 34, 0, 29) })
+	end)
+	closeBtn.MouseButton1Up:Connect(function()
+		Tween(closeBtn, T10, { Size = UDim2.new(0, 38, 0, 32) })
 	end)
 
 	-- ═══ FLOATING RESTORE ICON ═══
@@ -1213,6 +1256,34 @@ function Library:CreateWindow(cfg)
 
 	-- ------------------------------------------------------------
 	-- ------------------------------------------------------------
+	-- MINIMIZE LOGIC (moved here from right after minBtn's creation —
+	-- it needs tabBar/content/statusBar, which don't exist that early)
+	-- ------------------------------------------------------------
+	local minimized = false
+	minBtn.Activated:Connect(function()
+		minimized = not minimized
+		if minimized then
+			tabBar.Visible = false
+			content.Visible = false
+			statusBar.Visible = false
+			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, HEADER_H) })
+			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, 0) })
+			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, HEADER_H + 36) })
+			Tween(minGlyph, T20, { Rotation = 180 })
+		else
+			tabBar.Visible = true
+			content.Visible = true
+			statusBar.Visible = true
+			-- recompute body height from current WIN_H (supports resize)
+			Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, WIN_H) })
+			Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, WIN_H - HEADER_H) })
+			Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36) })
+			Tween(minGlyph, T20, { Rotation = 0 })
+		end
+	end)
+
+	-- ------------------------------------------------------------
+	-- ------------------------------------------------------------
 	-- HIDE / SHOW / MINIMIZE / TOGGLE KEYBIND
 	-- ------------------------------------------------------------
 	-- [FIX] closeBtn used to set frame/shadow/floatIcon visibility
@@ -1396,24 +1467,39 @@ function Library:CreateWindow(cfg)
 		-- [FIX] The comment here used to claim "btn uses AutomaticSize.X
 		-- now" but that property was never actually set on the instance —
 		-- Size was left hardcoded at UDim2.new(0, 90, 1, -10), so every
-		-- tab chip was exactly 90px wide no matter what. Anything longer
-		-- than a short one-word name (or any icon + name combo) overflowed
-		-- past the chip's rounded background with no wrapping or
-		-- truncation. AutomaticSize.X actually applied now, with padding
-		-- so the text isn't flush against the edges.
-		btn.Size = UDim2.new(0, 0, 1, -10)
-		btn.AutomaticSize = Enum.AutomaticSize.X
+		-- tab chip was exactly 90px wide no matter what, and anything
+		-- longer than a short one-word name overflowed the chip with no
+		-- wrapping or truncation.
+		--
+		-- [FIX #2] AutomaticSize.X (the first fix) technically works, but
+		-- it resolves through Roblox's layout engine asynchronously —
+		-- there's a real gap between setting .Text and .AbsoluteSize
+		-- actually reflecting it. moveIndicatorTo() reads AbsoluteSize /
+		-- AbsolutePosition immediately when a tab activates. If that read
+		-- happens before layout has settled (very plausible for the
+		-- first tab, activated via task.defer right after creation), the
+		-- sliding indicator snaps to the WRONG size/position, then jumps
+		-- to the correct one a moment later once layout catches up —
+		-- which reads exactly as "tabs weirdly move when clicked."
+		-- TextService:GetTextSize computes the exact pixel width
+		-- synchronously, before the button is even created, so there's
+		-- no layout race to lose: Size is correct from frame one.
+		local btnText = (icon or "") .. "  " .. name
+		local CHIP_PAD = 14
+		local textSize = TextService:GetTextSize(btnText, 12, Enum.Font.GothamBold, Vector2.new(1000, TABBAR_H))
+		local chipWidth = textSize.X + CHIP_PAD * 2
+		btn.Size = UDim2.new(0, chipWidth, 1, -10)
 		btn.Position = UDim2.new(0, 0, 0, 5)
 		btn.BackgroundColor3 = C.tabChip
 		btn.AutoButtonColor = false
 		btn.BorderSizePixel = 0
-		btn.Text = (icon or "") .. "  " .. name
+		btn.Text = btnText
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 12
 		btn.TextColor3 = C.textDim
 		btn.ZIndex = 4
 		btn.Parent = tabBar
-		pad(btn, 0, 0, 14, 14)
+		pad(btn, 0, 0, CHIP_PAD, CHIP_PAD)
 		corner(btn, R.tab)
 		local chipStroke = stroke(btn, C.borderAcc, 1)
 		-- Keep refs for setActive color tweens
