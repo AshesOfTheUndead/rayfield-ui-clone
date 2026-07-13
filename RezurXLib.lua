@@ -1,32 +1,26 @@
 -- ============================================================
--- RezurXLib v1.0 — Rayfield-shaped UI Library (RezurXlab skin)
+-- RezurXLib v3.1 - self-contained Roblox UI library
 --
--- A callable UI library with the same API surface as Rayfield
--- (CreateWindow -> Window:CreateTab -> Tab:CreateButton({...}),
--- Window/Library, Flags, themes, functional keybinds,
--- multi-select dropdowns) but wearing the RezurXlab Admin Panel
--- visual language: aurora header, sliding tab-pill indicator,
--- glow strip shimmer, chip tabs, status bar.
+-- Original implementation with tokenized themes, pointer-owned input,
+-- popup ownership, callback isolation, and no package dependency.
 --
--- Intentionally NOT included (this is game-owner admin UI, not
--- exploit tooling): no key system, no config-file persistence
--- via writefile, no remote script loading, no obfuscation or
--- anti-detection of any kind. Every callback is yours to wire
--- into your own server-validated RemoteEvents.
+-- Trust boundary: no remote loader, telemetry, HTTP request, obfuscation,
+-- executor-global call, or automatic file access. Callbacks are supplied by
+-- the host game and should target server-validated RemoteEvents where needed.
 --
 -- USAGE (ModuleScript):
 --   local Lib = require(path.to.RezurXLib)
 --   local Window = Lib:CreateWindow({
 --       Name            = "Admin Panel",
---       Subtitle        = "Management Console · RezurXlab",
---       LoadingTitle    = "RezurX lab",
+--       Subtitle        = "Management Console",
+--       LoadingTitle    = "RezurXLib",
 --       LoadingEnabled  = true,
---       Theme           = "Ember",             -- "Ember" | "Ocean" | "Crimson" | "Slate" | "Midnight" | "Forest" | "Coral" | "HighContrast" | "Soft"
+--       Theme           = "Quiet",             -- see Library:GetThemeNames()
 --       ToggleUIKeybind = Enum.KeyCode.K,
 --   })
---   local Tab = Window:CreateTab("Main", "📊")
+--   local Tab = Window:CreateTab("Main", "M")
 --   Tab:CreateButton({ Name = "Refresh", Callback = function() end })
---   See ExampleUsage.client.lua for the full element catalogue.
+--   See RezurXExample.client.lua for the full element catalogue.
 -- ============================================================
 
 local Players          = game:GetService("Players")
@@ -35,6 +29,7 @@ local TweenService     = game:GetService("TweenService")
 local RunService       = game:GetService("RunService")
 local Stats            = game:GetService("Stats")
 local CoreGui          = game:GetService("CoreGui")
+local GuiService       = game:GetService("GuiService")
 local TextService      = game:GetService("TextService")
 local HttpService      = game:GetService("HttpService")
 
@@ -43,7 +38,7 @@ local playerGui = player and player:WaitForChild("PlayerGui")
 
 -- ============================================================
 -- TWEEN PRESETS
--- Exponential easing for smooth Rayfield-style animations
+-- Purposeful easing for smooth, responsive interactions
 -- ============================================================
 local T10    = TweenInfo.new(0.10, Enum.EasingStyle.Quad,        Enum.EasingDirection.Out)
 local T15    = TweenInfo.new(0.15, Enum.EasingStyle.Quad,        Enum.EasingDirection.Out)
@@ -208,36 +203,81 @@ local Themes = {
                 tabBarBg=Color3.fromRGB(18,11,13),tabChip=Color3.fromRGB(46,30,34),tabChipHov=Color3.fromRGB(60,40,46),
                 headerA=Color3.fromRGB(38,22,28),headerB=Color3.fromRGB(22,13,16),indGradA=Color3.fromRGB(100,30,40),indGradB=Color3.fromRGB(66,18,26),
         },
-        -- Accessibility theme: near-max text/background contrast, a bright
-        -- high-visibility accent, and a solid (not dim) border so every panel
-        -- edge stays legible.
-        HighContrast = {
-                bg=Color3.fromRGB(0,0,0),panel=Color3.fromRGB(0,0,0),panelAlt=Color3.fromRGB(18,18,18),panelHov=Color3.fromRGB(32,32,32),
-                accent=Color3.fromRGB(255,214,10),accentHi=Color3.fromRGB(255,232,90),accentDim=Color3.fromRGB(180,148,0),accentDark=Color3.fromRGB(60,48,0),
-                text=Color3.fromRGB(255,255,255),textDim=Color3.fromRGB(230,230,230),muted=Color3.fromRGB(190,190,190),
-                green=Color3.fromRGB(60,255,100),greenDim=Color3.fromRGB(20,90,40),yellow=Color3.fromRGB(255,230,0),red=Color3.fromRGB(255,70,70),
-                border=Color3.fromRGB(255,255,255),track=Color3.fromRGB(40,40,40),white=Color3.fromRGB(255,255,255),black=Color3.fromRGB(0,0,0),
-                tabBarBg=Color3.fromRGB(0,0,0),tabChip=Color3.fromRGB(24,24,24),tabChipHov=Color3.fromRGB(44,44,44),
-                headerA=Color3.fromRGB(10,10,10),headerB=Color3.fromRGB(0,0,0),indGradA=Color3.fromRGB(255,214,10),indGradB=Color3.fromRGB(180,148,0),
-        },
-        -- Gentler counterpart to HighContrast: a tighter tonal range between
-        -- bg/panel/text and a desaturated lavender-gray accent, for a calmer
-        -- feel with reduced eye strain.
-        Soft = {
-                bg=Color3.fromRGB(24,24,28),panel=Color3.fromRGB(32,32,38),panelAlt=Color3.fromRGB(40,40,47),panelHov=Color3.fromRGB(48,48,56),
-                accent=Color3.fromRGB(150,160,220),accentHi=Color3.fromRGB(180,188,232),accentDim=Color3.fromRGB(112,120,168),accentDark=Color3.fromRGB(48,50,68),
-                text=Color3.fromRGB(210,210,218),textDim=Color3.fromRGB(168,168,180),muted=Color3.fromRGB(126,126,138),
-                green=Color3.fromRGB(140,200,150),greenDim=Color3.fromRGB(52,74,56),yellow=Color3.fromRGB(220,196,140),red=Color3.fromRGB(200,130,130),
-                border=Color3.fromRGB(52,52,60),track=Color3.fromRGB(44,44,52),white=Color3.fromRGB(255,255,255),black=Color3.fromRGB(0,0,0),
-                tabBarBg=Color3.fromRGB(28,28,33),tabChip=Color3.fromRGB(40,40,47),tabChipHov=Color3.fromRGB(48,48,56),
-                headerA=Color3.fromRGB(36,36,42),headerB=Color3.fromRGB(26,26,31),indGradA=Color3.fromRGB(120,128,176),indGradB=Color3.fromRGB(84,90,128),
-        },
 }
+
+-- The default v3 palette trades decorative neon for quiet precision: deep
+-- neutral surfaces, clear high-contrast copy, and one jade action color.
+Themes.Quiet = {
+        bg = Color3.fromRGB(10, 12, 11),
+        panel = Color3.fromRGB(18, 23, 20),
+        panelAlt = Color3.fromRGB(26, 33, 29),
+        panelHov = Color3.fromRGB(35, 44, 39),
+        accent = Color3.fromRGB(8, 122, 72),
+        accentHi = Color3.fromRGB(89, 223, 160),
+        accentDim = Color3.fromRGB(6, 91, 53),
+        accentDark = Color3.fromRGB(16, 54, 35),
+        text = Color3.fromRGB(241, 247, 243),
+        textDim = Color3.fromRGB(190, 205, 196),
+        muted = Color3.fromRGB(151, 169, 158),
+        green = Color3.fromRGB(73, 207, 128),
+        greenDim = Color3.fromRGB(21, 67, 42),
+        yellow = Color3.fromRGB(240, 190, 76),
+        red = Color3.fromRGB(228, 82, 90),
+        border = Color3.fromRGB(48, 61, 53),
+        track = Color3.fromRGB(43, 53, 47),
+        white = Color3.fromRGB(255, 255, 255),
+        black = Color3.fromRGB(0, 0, 0),
+        tabBarBg = Color3.fromRGB(14, 18, 16),
+        tabChip = Color3.fromRGB(22, 28, 25),
+        tabChipHov = Color3.fromRGB(32, 40, 35),
+        headerA = Color3.fromRGB(23, 30, 26),
+        headerB = Color3.fromRGB(14, 18, 16),
+        indGradA = Color3.fromRGB(17, 58, 38),
+        indGradB = Color3.fromRGB(12, 38, 26),
+}
+
+local function cloneTheme(source)
+        local result = {}
+        for key, value in pairs(source) do result[key] = value end
+        return result
+end
+
+Themes.HighContrast = cloneTheme(Themes.Quiet)
+Themes.HighContrast.bg = Color3.fromRGB(0, 0, 0)
+Themes.HighContrast.panel = Color3.fromRGB(12, 12, 12)
+Themes.HighContrast.panelAlt = Color3.fromRGB(25, 25, 25)
+Themes.HighContrast.panelHov = Color3.fromRGB(42, 42, 42)
+Themes.HighContrast.accent = Color3.fromRGB(0, 150, 82)
+Themes.HighContrast.accentHi = Color3.fromRGB(119, 255, 179)
+Themes.HighContrast.accentDim = Color3.fromRGB(0, 106, 57)
+Themes.HighContrast.accentDark = Color3.fromRGB(0, 58, 31)
+Themes.HighContrast.text = Color3.fromRGB(255, 255, 255)
+Themes.HighContrast.textDim = Color3.fromRGB(232, 232, 232)
+Themes.HighContrast.muted = Color3.fromRGB(205, 205, 205)
+Themes.HighContrast.border = Color3.fromRGB(213, 213, 213)
+Themes.HighContrast.track = Color3.fromRGB(70, 70, 70)
+
+Themes.Soft = cloneTheme(Themes.Quiet)
+Themes.Soft.bg = Color3.fromRGB(20, 24, 22)
+Themes.Soft.panel = Color3.fromRGB(29, 35, 31)
+Themes.Soft.panelAlt = Color3.fromRGB(38, 46, 41)
+Themes.Soft.panelHov = Color3.fromRGB(48, 58, 51)
+Themes.Soft.accent = Color3.fromRGB(31, 126, 83)
+Themes.Soft.accentHi = Color3.fromRGB(135, 222, 177)
+Themes.Soft.accentDim = Color3.fromRGB(23, 94, 62)
+Themes.Soft.accentDark = Color3.fromRGB(30, 64, 45)
+Themes.Soft.textDim = Color3.fromRGB(202, 213, 205)
+Themes.Soft.muted = Color3.fromRGB(168, 184, 174)
+Themes.Soft.border = Color3.fromRGB(61, 72, 65)
+Themes.Soft.track = Color3.fromRGB(56, 66, 60)
+
+local ThemeTokenSet = {}
+for token in pairs(Themes.Quiet) do ThemeTokenSet[token] = true end
 
 -- Active palette. Mutated in place by ApplyTheme so every
 -- closure that captured `C` keeps reading fresh values.
 local C = {}
-for k, v in pairs(Themes.Ember) do C[k] = v end
+for k, v in pairs(Themes.Quiet) do C[k] = v end
 C.borderAcc = C.accent
 
 -- ============================================================
@@ -379,22 +419,6 @@ local function keyName(keyCode)
         if keyCode == nil then return "None" end
         local n = keyCode.Name
         return n
-end
-
--- Subsequence fuzzy match: every character of `query` must appear in
--- `text` in order, not necessarily contiguous (e.g. "spd" matches
--- "Speed", "Movement Speed", "Speed Boost"). Callers pass both args
--- already lowercased. O(#text), no substring allocations.
-local function fuzzyMatch(query, text)
-        if query == "" then return true end
-        local qi, qlen = 1, #query
-        for i = 1, #text do
-                if text:byte(i) == query:byte(qi) then
-                        qi = qi + 1
-                        if qi > qlen then return true end
-                end
-        end
-        return false
 end
 
 -- ============================================================
@@ -562,16 +586,17 @@ end
 
 local Library = {}
 Library.Flags = {}          -- flag -> element object (has CurrentValue / CurrentOption / etc.)
-Library.Version = "2.1.0"
+Library.Version = "3.1.0"
 Library._windows = {}
+Library.Options = { ReducedMotion = false }
 
 -- ============================================================
 -- CreateWindow
 -- ============================================================
 function Library:CreateWindow(cfg)
         cfg = cfg or {}
-        local windowName   = cfg.Name or "RezurXlab Panel"
-        local subtitle     = cfg.Subtitle or "Management Console · RezurXlab"
+        local windowName   = cfg.Name or "RezurX UI"
+        local subtitle     = cfg.Subtitle or "Control center"
         local loadingTitle = cfg.LoadingTitle or windowName
         local loadingOn    = cfg.LoadingEnabled ~= false
         local toggleKey    = cfg.ToggleUIKeybind or Enum.KeyCode.K
@@ -580,10 +605,13 @@ function Library:CreateWindow(cfg)
         -- module palette directly, so changing one window's theme could leave
         -- another window partially recolored. This isolates theme updates.
         local C = {}
-        for key, value in pairs(Themes.Ember) do C[key] = value end
+        for key, value in pairs(Themes.Quiet) do C[key] = value end
         local initialTheme = (type(cfg.Theme) == "table") and cfg.Theme or Themes[cfg.Theme]
+        local activeThemeName = type(cfg.Theme) == "string" and cfg.Theme or "Quiet"
         if initialTheme then
-                for key, value in pairs(initialTheme) do C[key] = value end
+                for key, value in pairs(initialTheme) do
+                        if ThemeTokenSet[key] and typeof(value) == "Color3" then C[key] = value end
+                end
         end
         C.borderAcc = C.accent
 
@@ -594,7 +622,8 @@ function Library:CreateWindow(cfg)
         local WIN_W, WIN_H = normalizeSize(cfg.Size, 460, 500, MIN_W, MIN_H, MAX_W, MAX_H)
         local resizable = cfg.Resizable ~= false
         local accessibility = type(cfg.Accessibility) == "table" and cfg.Accessibility or {}
-        local reducedMotion = cfg.ReducedMotion == true or accessibility.ReducedMotion == true
+        local reducedMotion = cfg.ReducedMotion == true or accessibility.ReducedMotion == true or Library.Options.ReducedMotion == true
+        local animatedAccents = cfg.AnimatedAccents == true and not reducedMotion
         local motionScale = math.clamp(tonumber(cfg.MotionScale) or 1, 0.05, 3)
         local guiHost, hostInfo = resolveGuiHost(cfg)
         if not guiHost then
@@ -633,26 +662,47 @@ function Library:CreateWindow(cfg)
         -- SHARED DRAG ROUTER — one global InputChanged/InputEnded pair
         -- dispatching to whichever control is mid-drag.
         -- ------------------------------------------------------------
-        local DragHandlers = {}
-        local function registerDrag(key, moveFn, onEndFn)
-                DragHandlers[key] = { move = moveFn, onEnd = onEndFn }
+        -- A window owns exactly one pointer interaction at a time. This avoids
+        -- the old broadcast behavior, where one interrupted touch could drive
+        -- a window, slider, and color picker simultaneously.
+        local activeDrag = nil
+        local function finishDrag(reason)
+                local session = activeDrag
+                activeDrag = nil
+                if session and session.onEnd then pcall(session.onEnd, reason) end
         end
-        WindowJanitor:Add(UserInputService.InputChanged:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.MouseMovement
-                        or inp.UserInputType == Enum.UserInputType.Touch then
-                        for _, h in pairs(DragHandlers) do
-                                if h.move then h.move(inp.Position) end
+        local function registerDrag(owner, sourceInput, moveFn, onEndFn)
+                if not sourceInput then return end
+                finishDrag("replaced")
+                activeDrag = {
+                        owner = owner,
+                        input = sourceInput,
+                        inputType = sourceInput.UserInputType,
+                        move = moveFn,
+                        onEnd = onEndFn,
+                }
+        end
+        WindowJanitor:Add(UserInputService.InputChanged:Connect(function(input)
+                local session = activeDrag
+                if not session then return end
+                local mouseMove = session.inputType == Enum.UserInputType.MouseButton1
+                        and input.UserInputType == Enum.UserInputType.MouseMovement
+                local touchMove = session.inputType == Enum.UserInputType.Touch and input == session.input
+                if mouseMove or touchMove then
+                        local ok, err = pcall(session.move, input.Position)
+                        if not ok then
+                                warn("[RezurX UI] Drag '" .. tostring(session.owner) .. "' failed: " .. tostring(err))
+                                finishDrag("error")
                         end
                 end
         end))
-        WindowJanitor:Add(UserInputService.InputEnded:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.MouseButton1
-                        or inp.UserInputType == Enum.UserInputType.Touch then
-                        for _, h in pairs(DragHandlers) do
-                                if h.onEnd then pcall(h.onEnd) end
-                        end
-                        table.clear(DragHandlers)
-                end
+        WindowJanitor:Add(UserInputService.InputEnded:Connect(function(input)
+                local session = activeDrag
+                if not session then return end
+                local mouseEnd = session.inputType == Enum.UserInputType.MouseButton1
+                        and input.UserInputType == Enum.UserInputType.MouseButton1
+                local touchEnd = session.inputType == Enum.UserInputType.Touch and input == session.input
+                if mouseEnd or touchEnd then finishDrag("released") end
         end))
 
         local function ripple(parent, posX, posY, col)
@@ -724,31 +774,23 @@ function Library:CreateWindow(cfg)
                 local scale = math.clamp(math.min(scaleX, scaleY), 0.5, 1.0)  -- [FIX] floor 0.5 (was 0.4)
                 uiScale.Scale = scale
         end
-        updateScale()
-        -- [FIX] workspace.CurrentCamera can briefly be nil (camera not fully
-        -- loaded yet) — indexing it directly here would error. Bind the resize
-        -- listener when a camera is present, and re-bind whenever
-        -- CurrentCamera changes (first load or a later camera swap) so the
-        -- listener isn't silently lost for the rest of the session if it
-        -- wasn't ready at this exact line.
-        local cameraConn = nil
-        local function bindCameraResize()
-                if cameraConn then cameraConn:Disconnect() end
-                local currentCam = workspace.CurrentCamera
-                if currentCam then
-                        cameraConn = currentCam:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-                        WindowJanitor:Add(cameraConn)
+        -- CurrentCamera may be nil during startup, respawns, and teleports.
+        -- Rebind a single listener whenever Roblox supplies a replacement.
+        local cameraJanitor = Janitor.new()
+        WindowJanitor:Add(function() cameraJanitor:Cleanup() end)
+        local function bindCamera()
+                cameraJanitor:Cleanup()
+                local camera = workspace.CurrentCamera
+                if camera then
+                        cameraJanitor:Add(camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale))
                 end
-        end
-        bindCameraResize()
-        WindowJanitor:Add(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-                bindCameraResize()
                 updateScale()
-        end))
+        end
+        WindowJanitor:Add(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCamera))
+        bindCamera()
         -- Defensive re-apply — camera viewport may not be fully settled yet on
         -- some clients even though the ordering fix above covers the common case.
         task.delay(0.3, updateScale)
-        task.delay(1.0, updateScale)
 
         local HEADER_H, TABBAR_H, STATUSBAR_H = 54, 40, 24
 
@@ -831,7 +873,7 @@ function Library:CreateWindow(cfg)
                         ColorSequenceKeypoint.new(1.0, C.accentDim),
                 }
         end)
-        task.spawn(function()
+        if animatedAccents then task.spawn(function()
                 local shimmer = Instance.new("Frame")
                 shimmer.Size = UDim2.new(0, 60, 1, 0)
                 shimmer.BackgroundColor3 = C.white
@@ -846,7 +888,7 @@ function Library:CreateWindow(cfg)
                                 { Position = UDim2.new(1.2, 0, 0, 0) })
                         task.wait(3.8)
                 end
-        end)
+        end) end
 
         -- ------------------------------------------------------------
         -- HEADER
@@ -905,7 +947,7 @@ function Library:CreateWindow(cfg)
                         ColorSequenceKeypoint.new(1.0, C.headerA),
                 }
         end)
-        task.spawn(function()
+        if animatedAccents then task.spawn(function()
                 while header.Parent do
                         if reducedMotion then break end
                         Tween(logoGlow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
@@ -916,7 +958,7 @@ function Library:CreateWindow(cfg)
                                 { BackgroundTransparency = 0.94 })
                         task.wait(1.6)
                 end
-        end)
+        end) end
 
         local logo = Instance.new("TextLabel")
         logo.Text = windowName
@@ -955,6 +997,8 @@ function Library:CreateWindow(cfg)
         statFrame.BackgroundColor3 = C.panelAlt
         statFrame.BorderSizePixel = 0
         statFrame.ZIndex = 5
+        local showStats = cfg.ShowStats == true
+        statFrame.Visible = showStats
         statFrame.Parent = header
         corner(statFrame, R.small)
         local statStroke = stroke(statFrame, C.border, 1)
@@ -994,13 +1038,13 @@ function Library:CreateWindow(cfg)
         end)
 
         local fpsAvg = 60
-        WindowJanitor:Add(RunService.Heartbeat:Connect(function(dt)
+        if showStats then WindowJanitor:Add(RunService.Heartbeat:Connect(function(dt)
                 fpsAvg = fpsAvg * 0.88 + (1 / math.max(dt, 0.001)) * 0.12
                 local avg = math.floor(fpsAvg + 0.5)
                 fpsLabel.Text = avg .. " FPS"
                 fpsLabel.TextColor3 = avg >= 55 and C.green or avg >= 30 and C.yellow or C.red
-        end))
-        task.spawn(function()
+        end)) end
+        if showStats then task.spawn(function()
                 while screenGui.Parent do
                         local ok, ms = pcall(function()
                                 return Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
@@ -1015,7 +1059,7 @@ function Library:CreateWindow(cfg)
                         end
                         task.wait(1)
                 end
-        end)
+        end) end
 
         -- MINIMIZE + HIDE buttons
         local minBtn = Instance.new("TextButton")
@@ -1026,6 +1070,7 @@ function Library:CreateWindow(cfg)
         minBtn.BorderSizePixel = 0
         minBtn.AutoButtonColor = false
         minBtn.ZIndex = 5
+        minBtn.Selectable = true
         minBtn.Parent = header
         corner(minBtn, R.small)
         local minStroke = stroke(minBtn, C.border, 1)
@@ -1068,6 +1113,7 @@ function Library:CreateWindow(cfg)
         closeBtn.BorderSizePixel = 0
         closeBtn.AutoButtonColor = false
         closeBtn.ZIndex = 5
+        closeBtn.Selectable = true
         closeBtn.Parent = header
         corner(closeBtn, R.small)
         local closeStroke = stroke(closeBtn, Color3.fromRGB(160, 50, 50), 1)
@@ -1134,6 +1180,7 @@ function Library:CreateWindow(cfg)
         floatIcon.AutoButtonColor = false
         floatIcon.BorderSizePixel = 0
         floatIcon.ZIndex = 100
+        floatIcon.Selectable = true
         floatIcon.Visible = false
         floatIcon.Parent = screenGui
         corner(floatIcon, UDim.new(1, 0))
@@ -1146,12 +1193,13 @@ function Library:CreateWindow(cfg)
                         local startAbs = floatIcon.AbsolutePosition  -- [FIX] screen pixels
                         floatDragMoved = false
                         local vp = getViewport()
-                        registerDrag("floatIcon", function(pos)
+                        registerDrag("floatIcon", inp, function(pos)
                                 local d = pos - startDrag
                                 if d.Magnitude > 6 then floatDragMoved = true end  -- threshold
-                                local nx = math.clamp(startAbs.X + d.X, 0, vp.X - 44)
-                                local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 44)
-                                floatIcon.Position = UDim2.new(0, nx, 0, ny)
+                                local nx = math.clamp(startAbs.X + d.X, 0, math.max(0, vp.X - floatIcon.AbsoluteSize.X))
+                                local ny = math.clamp(startAbs.Y + d.Y, 0, math.max(0, vp.Y - floatIcon.AbsoluteSize.Y))
+                                local scale = math.max(uiScale.Scale, 0.01)
+                                floatIcon.Position = UDim2.new(0, nx / scale, 0, ny / scale)
                         end)
                 end
         end)
@@ -1188,14 +1236,31 @@ function Library:CreateWindow(cfg)
                         -- [FIX] Use AbsolutePosition (screen pixels) not Position.Offset
                         -- Position has scale 0.5/0.55, .Offset gives -WIN_W/2 → flinging
                         local startAbs = frame.AbsolutePosition
-                        Tween(shadow, T15, { BackgroundTransparency = 0.65 })
-                        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-                        registerDrag("window", function(pos)
+                        local startPosition = frame.Position
+                        local startShadowPosition = shadow.Position
+                        local startGlowPosition = ambientGlow.Position
+                        local moved = false
+                        local viewport = getViewport()
+                        local scale = math.max(uiScale.Scale, 0.01)
+                        registerDrag("window", inp, function(pos)
                                 local d = pos - dragStart
-                                local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
-                                local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
-                                frame.Position = UDim2.new(0, nx, 0, ny)
-                                shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
+                                if not moved and d.Magnitude < 5 then return end
+                                if not moved then
+                                        moved = true
+                                        Tween(shadow, T15, { BackgroundTransparency = 0.65 })
+                                end
+                                local minX = 56 - frame.AbsoluteSize.X
+                                local targetX = math.clamp(startAbs.X + d.X, minX, viewport.X - 56)
+                                local targetY = math.clamp(startAbs.Y + d.Y, 6, viewport.Y - 34)
+                                local logicalX = startPosition.X.Offset + (targetX - startAbs.X) / scale
+                                local logicalY = startPosition.Y.Offset + (targetY - startAbs.Y) / scale
+                                local shadowX = startShadowPosition.X.Offset + (targetX - startAbs.X) / scale
+                                local shadowY = startShadowPosition.Y.Offset + (targetY - startAbs.Y) / scale
+                                local glowX = startGlowPosition.X.Offset + (targetX - startAbs.X) / scale
+                                local glowY = startGlowPosition.Y.Offset + (targetY - startAbs.Y) / scale
+                                frame.Position = UDim2.new(startPosition.X.Scale, logicalX, startPosition.Y.Scale, logicalY)
+                                shadow.Position = UDim2.new(startShadowPosition.X.Scale, shadowX, startShadowPosition.Y.Scale, shadowY)
+                                ambientGlow.Position = UDim2.new(startGlowPosition.X.Scale, glowX, startGlowPosition.Y.Scale, glowY)
                         end, function()
                                 Tween(shadow, T15, { BackgroundTransparency = 0.52 })
                         end)
@@ -1252,9 +1317,10 @@ function Library:CreateWindow(cfg)
         tabShimmer.BackgroundTransparency = 0.75
         tabShimmer.BorderSizePixel = 0
         tabShimmer.ZIndex = 3
+        tabShimmer.Visible = animatedAccents
         tabShimmer.Parent = tabIndicator
         corner(tabShimmer, R.tab)
-        task.spawn(function()
+        if animatedAccents then task.spawn(function()
                 while tabIndicator.Parent do
                         if reducedMotion then break end
                         local w = math.max(tabIndicator.AbsoluteSize.X, 40)
@@ -1263,7 +1329,7 @@ function Library:CreateWindow(cfg)
                                 { Position = UDim2.new(0, w + 10, 0, 0) })
                         task.wait(2.4)
                 end
-        end)
+        end) end
 
         local tabLayout = Instance.new("UIListLayout")
         tabLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -1317,7 +1383,7 @@ function Library:CreateWindow(cfg)
         sDot.ZIndex = 6
         sDot.Parent = statusBar
         corner(sDot, 4)
-        if not reducedMotion then
+        if cfg.ShowStatusPulse == true and not reducedMotion then
                 task.spawn(function()
                         while sDot.Parent do
                                 Tween(sDot, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
@@ -1374,24 +1440,8 @@ function Library:CreateWindow(cfg)
         end)
 
         -- [FIX] Make status bar draggable (move window from bottom too)
-        WindowJanitor:Add(statusBar.InputBegan:Connect(function(inp)
-                if inp.UserInputType == Enum.UserInputType.MouseButton1
-                        or inp.UserInputType == Enum.UserInputType.Touch then
-                local dragStart = inp.Position
-                local startAbs = frame.AbsolutePosition  -- [FIX] screen pixels
-                Tween(shadow, T15, { BackgroundTransparency = 0.65 })
-                local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-                registerDrag("statusbar", function(pos)
-                        local d = pos - dragStart
-                        local nx = math.clamp(startAbs.X + d.X, -WIN_W + 100, vp.X - 100)
-                        local ny = math.clamp(startAbs.Y + d.Y, 0, vp.Y - 30)
-                        frame.Position = UDim2.new(0, nx, 0, ny)
-                        shadow.Position = UDim2.new(0, nx - 18, 0, ny - 18)
-                end, function()
-                        Tween(shadow, T15, { BackgroundTransparency = 0.52 })
-                end)
-                end
-        end))
+        -- The footer is informational only. Letting it drag the window made
+        -- scrolls and taps near status text feel unpredictable on touch.
 
         -- [FIX] Resize handle (bottom-right corner) — drag to resize window
         local resizeHandle = Instance.new("TextButton")
@@ -1407,6 +1457,7 @@ function Library:CreateWindow(cfg)
         resizeHandle.AutoButtonColor = false
         resizeHandle.BorderSizePixel = 0
         resizeHandle.ZIndex = 8
+        resizeHandle.Selectable = true
         resizeHandle.Visible = resizable
         resizeHandle.Parent = frame
         corner(resizeHandle, R.small)
@@ -1423,20 +1474,23 @@ function Library:CreateWindow(cfg)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1
                         or inp.UserInputType == Enum.UserInputType.Touch then
                 -- Lock top-left corner: record it in absolute pixels, resize from there
-                local topLeft = frame.AbsolutePosition
                 local dragStart = inp.Position
                 local startW, startH = WIN_W, WIN_H
+                local startFramePosition = frame.Position
+                local startShadowPosition = shadow.Position
+                local scale = math.max(uiScale.Scale, 0.01)
                 Tween(shadow, T15, { BackgroundTransparency = 0.65 })
-                registerDrag("resize", function(pos)
+                registerDrag("resize", inp, function(pos)
                         local d = pos - dragStart
-                        local newW = math.clamp(startW + d.X, MIN_W, MAX_W)
-                        local newH = math.clamp(startH + d.Y, MIN_H, MAX_H)
+                        local newW = math.clamp(startW + d.X / scale, MIN_W, MAX_W)
+                        local newH = math.clamp(startH + d.Y / scale, MIN_H, MAX_H)
                         WIN_W = newW
                         WIN_H = newH
-                        frame.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y)
+                        frame.Position = startFramePosition
                         frame.Size = UDim2.new(0, newW, 0, newH)
-                        shadow.Position = UDim2.new(0, topLeft.X - 18, 0, topLeft.Y - 18)
+                        shadow.Position = startShadowPosition
                         shadow.Size = UDim2.new(0, newW + 36, 0, newH + 36)
+                        ambientGlow.Size = UDim2.new(0, newW + 70, 0, newH + 70)
                         if not minimized then
                                 body.Size = UDim2.new(1, 0, 0, newH - HEADER_H)
                         end
@@ -1489,8 +1543,8 @@ function Library:CreateWindow(cfg)
                 duration = duration or 5
                 local ncfg = NTYPES[ntype] or NTYPES.info
                 local col = ncfg.color
-                local hasActions = type(actions) == "table" and #actions > 0
-                local finalHeight = hasActions and 98 or 68
+                local actionList = type(actions) == "table" and actions or {}
+                local notificationHeight = #actionList > 0 and 98 or 68
 
                 local n = Instance.new("Frame")
                 n.Size = UDim2.new(1, 30, 0, 0)
@@ -1498,6 +1552,7 @@ function Library:CreateWindow(cfg)
                 n.BackgroundColor3 = C.panel
                 n.BackgroundTransparency = 1
                 n.ClipsDescendants = true
+                n.Active = true
                 n.ZIndex = 6
                 n.Parent = notifContainer
                 corner(n, R.panel)
@@ -1556,39 +1611,70 @@ function Library:CreateWindow(cfg)
                 cnt.ZIndex = 6
                 cnt.Parent = n
 
-                if hasActions then
-                        local ax = 44
-                        for _, act in ipairs(actions) do
-                                local label = tostring(act.Text or "Action")
-                                local measured = TextService:GetTextSize(label, 12, Enum.Font.GothamBold, Vector2.new(200, 20))
-                                local bw = measured.X + 20
-                                local abtn = Instance.new("TextButton")
-                                abtn.Size = UDim2.new(0, bw, 0, 24)
-                                abtn.Position = UDim2.new(0, ax, 0, 64)
-                                abtn.BackgroundColor3 = C.panelAlt
-                                abtn.AutoButtonColor = false
-                                abtn.BorderSizePixel = 0
-                                abtn.Font = Enum.Font.GothamBold
-                                abtn.TextSize = 12
-                                abtn.TextColor3 = col
-                                abtn.Text = label
-                                abtn.ZIndex = 6
-                                abtn.Parent = n
-                                corner(abtn, R.small)
-                                local aStroke = stroke(abtn, col, 1)
-                                abtn.MouseEnter:Connect(function() Tween(abtn, T10, { BackgroundColor3 = C.panelHov }) end)
-                                abtn.MouseLeave:Connect(function() Tween(abtn, T10, { BackgroundColor3 = C.panelAlt }) end)
-                                abtn.MouseButton1Click:Connect(function()
-                                        if act.Callback then
-                                                local ok, err = pcall(act.Callback)
-                                                if not ok then warn("[RezurXLib] Notify action '" .. label .. "' errored: " .. tostring(err)) end
-                                        end
-                                        local t = Tween(n, T20, { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1 })
-                                        if t then t.Completed:Connect(function() n:Destroy() end) else n:Destroy() end
+                -- Actions turn a passive toast into a compact decision point.  They
+                -- are deliberately capped at two so the notification never becomes
+                -- a small modal or obscures the game.
+                local dismissed = false
+                local actionButtons = {}
+                local function dismiss()
+                        if dismissed then return end
+                        dismissed = true
+                        local t = Tween(n, T20, { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1 })
+                        if t then
+                                t.Completed:Connect(function()
+                                        if n and n.Parent then n:Destroy() end
                                 end)
-                                ax = ax + bw + 8
+                        elseif n and n.Parent then
+                                n:Destroy()
                         end
                 end
+
+                local actionCount = math.min(#actionList, 2)
+                for index = 1, actionCount do
+                        local action = actionList[index]
+                        if type(action) == "table" then
+                                local button = Instance.new("TextButton")
+                                local width = actionCount == 1 and 104 or 86
+                                local rightOffset = 10 + (actionCount - index) * (width + 6)
+                                button.Size = UDim2.new(0, width, 0, 24)
+                                button.Position = UDim2.new(1, -rightOffset - width, 1, -30)
+                                button.BackgroundColor3 = index == 1 and col or C.panelAlt
+                                button.BorderSizePixel = 0
+                                button.AutoButtonColor = false
+                                button.Text = tostring(action.Text or action.Name or "Action")
+                                button.Font = Enum.Font.GothamBold
+                                button.TextSize = 11
+                                button.TextColor3 = index == 1 and C.white or C.text
+                                button.ZIndex = 7
+                                button.Parent = n
+                                button.Selectable = true
+                                corner(button, R.small)
+                                stroke(button, index == 1 and col or C.border, 1)
+                                table.insert(actionButtons, button)
+                                button.Activated:Connect(function()
+                                        if type(action.Callback) == "function" then
+                                                task.spawn(function()
+                                                        local ok, err = pcall(action.Callback, n, action)
+                                                        if not ok then warn("[RezurXLib] Notification action failed:", err) end
+                                                end)
+                                        end
+                                        if action.Dismiss ~= false then dismiss() end
+                                end)
+                        end
+                end
+
+                -- A toast can be dismissed by tapping its empty surface.  Action
+                -- buttons are excluded so an action with Dismiss = false remains
+                -- available after it runs.
+                n.InputBegan:Connect(function(input)
+                        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                        local pos = input.Position
+                        for _, button in ipairs(actionButtons) do
+                                local p, s = button.AbsolutePosition, button.AbsoluteSize
+                                if pos.X >= p.X and pos.X <= p.X + s.X and pos.Y >= p.Y and pos.Y <= p.Y + s.Y then return end
+                        end
+                        dismiss()
+                end)
 
                 local prog = Instance.new("Frame")
                 prog.Size = UDim2.new(1, 0, 0, 2)
@@ -1601,21 +1687,18 @@ function Library:CreateWindow(cfg)
 
                 Tween(n, T20, { BackgroundTransparency = 0.05 })
                 Tween(n, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                        Size = UDim2.new(1, 0, 0, finalHeight),
+                        Size = UDim2.new(1, 0, 0, notificationHeight),
                         Position = UDim2.new(0, 0, 0, 0),
                 })
                 task.delay(0.25, function()
                         Tween(prog, TweenInfo.new(duration, Enum.EasingStyle.Linear),
                                 { Size = UDim2.new(0, 0, 0, 2) })
                 end)
-                task.delay(duration, function()
-                        local t = Tween(n, T20, { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1 })
-                        if t then t.Completed:Connect(function() n:Destroy() end) else n:Destroy() end
-                end)
+                task.delay(duration, dismiss)
                 return n
         end
 
-        -- Rayfield-style: Window:Notify({Title, Content, Duration, Type, Actions})
+        -- Table-form notification API: Window:Notify({Title, Content, Duration, Type})
         function Window:Notify(ncfg)
                 ncfg = ncfg or {}
                 return notify(ncfg.Title, ncfg.Content, ncfg.Duration, ncfg.Type, ncfg.Actions)
@@ -1791,7 +1874,14 @@ function Library:CreateWindow(cfg)
                         warn("[RezurXLib] Unknown theme: " .. tostring(theme))
                         return
                 end
-                for k, v in pairs(set) do C[k] = v end
+                for k, v in pairs(set) do
+                        if ThemeTokenSet[k] and typeof(v) == "Color3" then
+                                C[k] = v
+                        elseif type(theme) == "table" then
+                                warn("[RezurXLib] Ignoring invalid theme token: " .. tostring(k))
+                        end
+                end
+                if type(theme) == "string" then activeThemeName = theme end
                 C.borderAcc = C.accent
                 for _, fn in ipairs(ThemeRefreshers) do
                         pcall(fn)
@@ -1803,79 +1893,37 @@ function Library:CreateWindow(cfg)
         -- ============================================================
         local Tabs = {}
         local ActiveTab = nil
+        local keyboardAdjusters = setmetatable({}, { __mode = "k" })
 
-        -- ============================================================
-        -- Keyboard navigation — Tab / Shift+Tab cycles focus among the
-        -- active tab's interactive controls, Enter activates the focused
-        -- one, Left/Right nudge a focused slider. Reuses each control's
-        -- own themed stroke as the focus ring (registerFocusable is
-        -- called from inside the relevant tab:Create* methods below), so
-        -- there's no overlay Frame and no absolute-position/UIScale math.
-        -- ============================================================
-        local FocusableElements = {}
-        local currentFocusEntry = nil
-
-        local function registerFocusable(ownerTab, holderInst, focusStroke, activateFn, adjustFn)
-                table.insert(FocusableElements, {
-                        tab = ownerTab, holder = holderInst, focusStroke = focusStroke,
-                        activate = activateFn, adjust = adjustFn,
-                })
-        end
-
-        local function setFocusVisual(entry, isFocused)
-                if not entry or not entry.focusStroke then return end
-                Tween(entry.focusStroke, T10, {
-                        Color = isFocused and C.accent or C.border,
-                        Thickness = isFocused and 2 or 1,
-                })
-        end
-
-        local function clearFocus()
-                if currentFocusEntry then
-                        setFocusVisual(currentFocusEntry, false)
-                        currentFocusEntry = nil
-                end
-        end
-
-        local function moveFocus(step)
-                local pool = {}
-                for _, f in ipairs(FocusableElements) do
-                        if f.tab == ActiveTab and f.holder and f.holder.Parent then
-                                table.insert(pool, f)
+        -- Keyboard focus is opt-in per interactive control (Selectable = true)
+        -- so invisible input overlays never become dead stops in the tab order.
+        function Window:FocusNext(reverse)
+                local root = ActiveTab and ActiveTab.Page or screenGui
+                local candidates = {}
+                for _, instance in ipairs(root:GetDescendants()) do
+                        if instance:IsA("GuiButton") and instance.Visible and instance.Active and instance.Selectable then
+                                table.insert(candidates, instance)
                         end
                 end
-                if #pool == 0 then return end
-                local idx = 0
-                if currentFocusEntry then
-                        for i, f in ipairs(pool) do
-                                if f == currentFocusEntry then idx = i break end
-                        end
+                table.sort(candidates, function(a, b)
+                        local ap, bp = a.AbsolutePosition, b.AbsolutePosition
+                        if math.abs(ap.Y - bp.Y) > 4 then return ap.Y < bp.Y end
+                        return ap.X < bp.X
+                end)
+                if #candidates == 0 then return nil end
+                local selected = GuiService.SelectedObject
+                local index = 0
+                for candidateIndex, candidate in ipairs(candidates) do
+                        if candidate == selected then index = candidateIndex break end
                 end
-                idx = ((idx - 1 + step) % #pool) + 1
-                if currentFocusEntry then setFocusVisual(currentFocusEntry, false) end
-                currentFocusEntry = pool[idx]
-                setFocusVisual(currentFocusEntry, true)
+                if reverse then
+                        index = index <= 1 and #candidates or index - 1
+                else
+                        index = index >= #candidates and 1 or index + 1
+                end
+                GuiService.SelectedObject = candidates[index]
+                return candidates[index]
         end
-
-        WindowJanitor:Add(UserInputService.InputBegan:Connect(function(inp, gp)
-                if gp then return end
-                if hidden or minimized then return end
-                if UserInputService:GetFocusedTextBox() then return end
-                if inp.KeyCode == Enum.KeyCode.Tab then
-                        local shiftHeld = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-                                or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
-                        moveFocus(shiftHeld and -1 or 1)
-                elseif inp.KeyCode == Enum.KeyCode.Return or inp.KeyCode == Enum.KeyCode.KeypadEnter then
-                        if currentFocusEntry and currentFocusEntry.activate then
-                                local ok, err = pcall(currentFocusEntry.activate)
-                                if not ok then warn("[RezurXLib] Keyboard-activate error: " .. tostring(err)) end
-                        end
-                elseif inp.KeyCode == Enum.KeyCode.Left or inp.KeyCode == Enum.KeyCode.Right then
-                        if currentFocusEntry and currentFocusEntry.adjust then
-                                currentFocusEntry.adjust(inp.KeyCode == Enum.KeyCode.Right and 1 or -1)
-                        end
-                end
-        end))
 
         local function moveIndicatorTo(btn, animated)
                 local w = btn.AbsoluteSize.X
@@ -1905,7 +1953,7 @@ function Library:CreateWindow(cfg)
 
                 local btn = Instance.new("TextButton")
                 btn.Name = "TabChip"
-                -- [FIX] Use btn.Text directly for icon+text (Sirius/Rayfield style).
+                -- Use btn.Text directly for the icon and title.
                 -- Child labels had rendering issues on some devices → blank tabs.
                 --
                 -- [FIX] The comment here used to claim "btn uses AutomaticSize.X
@@ -1928,25 +1976,18 @@ function Library:CreateWindow(cfg)
                 -- TextService:GetTextSize computes the exact pixel width
                 -- synchronously, before the button is even created, so there's
                 -- no layout race to lose: Size is correct from frame one.
-                local btnText = (icon or "") .. "  " .. name
-                -- [FIX #3] Auto-size the chip to its text instead of a fixed
-                -- 100px width. Two earlier attempts at this both regressed
-                -- something (see FIX / FIX #2 above): AutomaticSize.X resolves
-                -- async and lost the race with moveIndicatorTo()'s synchronous
-                -- AbsoluteSize read; a bare GetTextSize width with zero padding
-                -- sat exactly on the text's pixel bounds and subpixel clipping
-                -- there blanked the last character on some devices. This keeps
-                -- the synchronous measurement (no layout race) but pads well
-                -- past the tight bound (no clipping), and clamps to a sane
-                -- range so one very long tab name can't blow out the tab bar —
-                -- TextTruncate below still catches anything past the clamp.
-                local measured = TextService:GetTextSize(btnText, 12, Enum.Font.GothamBold, Vector2.new(300, 24))
-                local chipWidth = math.clamp(measured.X + 28, 76, 220)
-                btn.Size = UDim2.new(0, chipWidth, 1, -10)
+                local btnText = (icon or "") .. "  " .. tostring(name or "Tab")
+                -- Size synchronously from the rendered text. The clamp keeps
+                -- compact labels touchable and long labels readable without a
+                -- layout race or arbitrary one-size-fits-all tab width.
+                local measured = TextService:GetTextSize(btnText, 12, Enum.Font.GothamBold, Vector2.new(1000, 24))
+                local tabWidth = math.clamp(math.ceil(measured.X) + 28, 76, 196)
+                btn.Size = UDim2.new(0, tabWidth, 1, -10)
                 btn.Position = UDim2.new(0, 0, 0, 5)
                 btn.BackgroundColor3 = C.tabChip
                 btn.AutoButtonColor = false
                 btn.BorderSizePixel = 0
+                btn.Selectable = true
                 btn.Text = btnText
                 btn.Font = Enum.Font.GothamBold
                 btn.TextSize = 12
@@ -1996,7 +2037,6 @@ function Library:CreateWindow(cfg)
 
                 local function setActive(skipAnim)
                         closeCurrentPopup()
-                        clearFocus()
                         if ActiveTab and ActiveTab ~= tab then
                                 local prev = ActiveTab
                                 prev.Page.Visible = false
@@ -2044,7 +2084,7 @@ function Library:CreateWindow(cfg)
                                 Tween(btn, T10, { TextColor3 = C.text })
                         end
                 end)
-                btn.MouseButton1Click:Connect(function()
+                btn.Activated:Connect(function()
                         ripple(btn, btn.AbsoluteSize.X / 2, btn.AbsoluteSize.Y / 2, C.accent)
                         setActive(false)
                 end)
@@ -2065,6 +2105,18 @@ function Library:CreateWindow(cfg)
                         holder.Parent = page
                         corner(holder, R.panel)
                         local strk = stroke(holder, C.border, 1)
+                        -- A restrained two-stop surface gradient gives cards
+                        -- depth without relying on noisy textures or shadows.
+                        local surfaceGradient = gradient(holder, ColorSequence.new({
+                                ColorSequenceKeypoint.new(0, C.panelAlt),
+                                ColorSequenceKeypoint.new(1, C.panel),
+                        }), 90)
+                        onTheme(function()
+                                surfaceGradient.Color = ColorSequence.new({
+                                        ColorSequenceKeypoint.new(0, C.panelAlt),
+                                        ColorSequenceKeypoint.new(1, C.panel),
+                                })
+                        end)
                         return holder, strk
                 end
 
@@ -2079,6 +2131,16 @@ function Library:CreateWindow(cfg)
                         end)
                         instance.MouseLeave:Connect(function()
                                 hideTooltip()
+                        end)
+                        -- Touch does not expose hover. A short, non-blocking
+                        -- hint on first press keeps tooltips useful on mobile
+                        -- without turning them into modal popups.
+                        instance.InputBegan:Connect(function(input)
+                                if input.UserInputType ~= Enum.UserInputType.Touch then return end
+                                showTooltip(text, instance, screenGui, C)
+                                task.delay(1.6, function()
+                                        if tooltipFrame and tooltipFrame.Parent then hideTooltip() end
+                                end)
                         end)
                 end
 
@@ -2138,31 +2200,25 @@ function Library:CreateWindow(cfg)
                         return f
                 end
 
-                -- Accepts a plain string (`tab:CreateLabel("Hi")`, kept for
-                -- backward compatibility) or a config table:
-                -- { Text, Color, Bold, TextSize, Align }
-                function tab:CreateLabel(cfg)
-                        cfg = (type(cfg) == "string" and { Text = cfg }) or cfg or {}
-                        local customColor = cfg.Color
+                function tab:CreateLabel(text)
                         local holder, strk = makeHolder(34)
                         local lbl = Instance.new("TextLabel")
                         lbl.Size = UDim2.new(1, -28, 1, 0)
                         lbl.Position = UDim2.new(0, 14, 0, 0)
                         lbl.BackgroundTransparency = 1
-                        lbl.Font = cfg.Bold and Enum.Font.GothamBold or Enum.Font.GothamMedium
-                        lbl.TextSize = cfg.TextSize or 13
-                        lbl.TextColor3 = customColor or C.textDim
-                        lbl.TextXAlignment = cfg.Align or Enum.TextXAlignment.Left
-                        lbl.Text = cfg.Text or ""
+                        lbl.Font = Enum.Font.GothamMedium
+                        lbl.TextSize = 13
+                        lbl.TextColor3 = C.textDim
+                        lbl.TextXAlignment = Enum.TextXAlignment.Left
+                        lbl.Text = text or ""
                         lbl.Parent = holder
                         onTheme(function()
                                 Tween(holder, T20, { BackgroundColor3 = C.panel })
                                 Tween(strk, T20, { Color = C.border })
-                                if not customColor then Tween(lbl, T20, { TextColor3 = C.textDim }) end
+                                Tween(lbl, T20, { TextColor3 = C.textDim })
                         end)
                         local obj = {}
                         function obj:Set(newText) lbl.Text = newText end
-                        function obj:SetColor(newColor) customColor = newColor; lbl.TextColor3 = newColor end
                         return obj
                 end
 
@@ -2227,7 +2283,7 @@ function Library:CreateWindow(cfg)
                         img.Name = "Image"
                         img.Size = UDim2.new(1, 0, 1, 0)
                         img.BackgroundTransparency = 1
-                        img.Image = icfg.Image or ""
+                        img.Image = Library:ResolveImage(icfg.Image or "")
                         img.ScaleType = icfg.ScaleType or Enum.ScaleType.Stretch
                         img.Parent = holder
                         corner(img, R.panel)
@@ -2238,7 +2294,7 @@ function Library:CreateWindow(cfg)
                         end)
                         applyTooltip(holder, icfg.Tooltip)
                         local obj = {}
-                        function obj:Set(imageId) img.Image = imageId end
+                        function obj:Set(imageId) img.Image = Library:ResolveImage(imageId) end
                         return obj
                 end
 
@@ -2254,6 +2310,7 @@ function Library:CreateWindow(cfg)
                         b.AutoButtonColor = false
                         b.BorderSizePixel = 0
                         b.ClipsDescendants = true
+                        b.Selectable = true
                         b.Parent = page
                         corner(b, R.panel)
                         local strk = stroke(b, C.border, 1)
@@ -2287,7 +2344,8 @@ function Library:CreateWindow(cfg)
                                 Tween(b, T20, { BackgroundColor3 = C.panel })
                                 Tween(arr, T20, { TextColor3 = C.muted, Position = UDim2.new(1, -22, 0, 0) })
                         end)
-                        local function fireButtonCallback()
+                        b.Activated:Connect(function()
+                                ripple(b, b.AbsoluteSize.X - 30, b.AbsoluteSize.Y / 2, C.accent)
                                 Tween(b, T20, { BackgroundColor3 = C.accentDim })
                                 Tween(lbl, T20, { TextColor3 = C.white })
                                 task.delay(0.15, function()
@@ -2298,7 +2356,7 @@ function Library:CreateWindow(cfg)
                                     task.spawn(function()
                                         local ok, err = pcall(callback)
                                         if not ok then
-                                                -- Rayfield-style: red flash on callback error
+                                                -- Brief error state for a failed callback.
                                                 Tween(b, T20, { BackgroundColor3 = Color3.fromRGB(85, 0, 0) })
                                                 local origText = lbl.Text
                                                 lbl.Text = "Callback Error"
@@ -2310,10 +2368,6 @@ function Library:CreateWindow(cfg)
                                         end
                                     end)
                                 end
-                        end
-                        b.MouseButton1Click:Connect(function()
-                                ripple(b, b.AbsoluteSize.X - 30, b.AbsoluteSize.Y / 2, C.accent)
-                                fireButtonCallback()
                         end)
                         onTheme(function()
                                 Tween(b, T20, { BackgroundColor3 = C.panel })
@@ -2321,7 +2375,6 @@ function Library:CreateWindow(cfg)
                                 Tween(lbl, T20, { TextColor3 = C.text })
                                 Tween(arr, T20, { TextColor3 = C.muted })
                         end)
-                        registerFocusable(tab, b, strk, fireButtonCallback)
 
                         local obj = {}
                         function obj:Set(newName) lbl.Text = newName end
@@ -2353,6 +2406,7 @@ function Library:CreateWindow(cfg)
                                 b.Text = ""
                                 b.AutoButtonColor = false
                                 b.BorderSizePixel = 0
+                                b.Selectable = true
                                 b.Parent = holder
                                 corner(b, R.control)
                                 local bStrk = stroke(b, C.border, 1)
@@ -2366,7 +2420,7 @@ function Library:CreateWindow(cfg)
                                 bLbl.Parent = b
                                 b.MouseEnter:Connect(function() Tween(b, T10, { BackgroundColor3 = C.panelHov }) end)
                                 b.MouseLeave:Connect(function() Tween(b, T10, { BackgroundColor3 = C.panel }) end)
-                                b.MouseButton1Click:Connect(function()
+                                b.Activated:Connect(function()
                                         ripple(b, b.AbsoluteSize.X / 2, b.AbsoluteSize.Y / 2, C.accent)
                                         if btnCfg.Callback then task.spawn(function() pcall(btnCfg.Callback) end) end
                                 end)
@@ -2429,12 +2483,13 @@ function Library:CreateWindow(cfg)
                         hit.BorderSizePixel = 0
                         hit.ZIndex = 10
                         hit.Parent = holder
+                        hit.Selectable = true
 
                         local obj = { CurrentValue = state }
                         local function apply(v, silent)
                                 state = v
                                 obj.CurrentValue = v
-                                -- Rayfield-style: knob shrinks briefly then grows back (pop effect)
+                                -- The knob contracts briefly before settling into place.
                                 Tween(knob, TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                         { Size = UDim2.new(0, 14, 0, 14) })
                                 task.delay(0.15, function()
@@ -2450,7 +2505,7 @@ function Library:CreateWindow(cfg)
                                 if callback and not silent then
                                         local ok, err = pcall(callback, state)
                                         if not ok then
-                                                -- Rayfield-style: red flash on callback error
+                                                -- Brief error state for a failed callback.
                                                 Tween(holder, T20, { BackgroundColor3 = Color3.fromRGB(85, 0, 0) })
                                                 local origText = lbl.Text
                                                 lbl.Text = "Callback Error"
@@ -2462,11 +2517,12 @@ function Library:CreateWindow(cfg)
                                         end
                                 end
                         end
-                        function obj:Set(v) apply(v) end
+                        function obj:Set(v) apply(v == true) end
                         function obj:SetLabel(newText) lbl.Text = newText end
                         function obj:Get() return state end
+                        -- Reset is intentionally public so a settings panel can
+                        -- restore its declared default without recreating UI.
                         function obj:Reset() apply(defaultState) end
-                        registerFocusable(tab, holder, hStroke, function() apply(not state) end)
 
                         hit.Activated:Connect(function()
                                 apply(not state)
@@ -2489,9 +2545,10 @@ function Library:CreateWindow(cfg)
                         scfg = scfg or {}
                         local nameText  = scfg.Name or "Slider"
                         local range     = scfg.Range or { 0, 100 }
-                        local minVal    = range[1]
-                        local maxVal    = range[2]
-                        local increment = scfg.Increment or 1
+                        local minVal    = tonumber(range[1]) or 0
+                        local maxVal    = tonumber(range[2]) or 100
+                        if maxVal <= minVal then maxVal = minVal + 1 end
+                        local increment = math.max(tonumber(scfg.Increment) or 1, 0.00001)
                         local suffix    = scfg.Suffix or ""
                         local callback  = scfg.Callback
                         local value     = math.clamp(scfg.CurrentValue or minVal, minVal, maxVal)
@@ -2547,7 +2604,7 @@ function Library:CreateWindow(cfg)
                         knob.Parent = track
                         corner(knob, UDim.new(1, 0))
                         local knobStroke = stroke(knob, C.accent, 2)
-                        -- Shadow under knob for depth (Rayfield-style)
+                        -- Subtle knob shadow for depth.
                         local knobShadow = Instance.new("ImageLabel")
                         knobShadow.Size = UDim2.new(1, 8, 1, 8)
                         knobShadow.Position = UDim2.new(0, -4, 0, -4)
@@ -2591,13 +2648,10 @@ function Library:CreateWindow(cfg)
                                 if callback then pcall(callback, value) end
                         end
                         function obj:Get() return value end
-                        function obj:Reset() obj:Set(defaultValue) end
-                        registerFocusable(tab, holder, hStroke, nil, function(dir)
-                                obj:Set(math.clamp(value + dir * increment, minVal, maxVal))
-                        end)
+                        function obj:Reset() return obj:Set(defaultValue) end
 
                                 local function setFromX(x)
-                                        local pct = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                                        local pct = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
                                         local v = snap(minVal + pct * (maxVal - minVal))
                                         if v ~= value then
                                                 value = v
@@ -2634,14 +2688,18 @@ function Library:CreateWindow(cfg)
                                 hit.BorderSizePixel = 0
                                 hit.ZIndex = 10
                                 hit.Parent = holder
+                                hit.Selectable = true
+                                keyboardAdjusters[hit] = function(direction)
+                                        obj:Set(value + direction * increment)
+                                end
                                 hit.InputBegan:Connect(function(inp)
                                         if inp.UserInputType == Enum.UserInputType.MouseButton1
                                                 or inp.UserInputType == Enum.UserInputType.Touch then
-                                                -- Knob grows on grab (Rayfield-style)
+                                                -- The knob grows slightly while it is grabbed.
                                                 Tween(knob, T20, { Size = UDim2.new(0, 22, 0, 22) })
                                                 setFromX(inp.Position.X)
                                                 fireCallback()
-                                                registerDrag(hit, function(pos)
+                                                registerDrag(hit, inp, function(pos)
                                                         setFromX(pos.X)
                                                         fireCallback()
                                                 end, function()
@@ -2675,6 +2733,7 @@ function Library:CreateWindow(cfg)
                         icfg = icfg or {}
                         local nameText = icfg.Name or "Input"
                         local callback = icfg.Callback
+                        local defaultValue = tostring(icfg.CurrentValue or "")
 
                         local holder, strk = makeHolder(48)
                         local lbl = Instance.new("TextLabel")
@@ -2697,11 +2756,10 @@ function Library:CreateWindow(cfg)
                         box.TextColor3 = C.text
                         box.PlaceholderColor3 = C.muted
                         box.PlaceholderText = icfg.PlaceholderText or ""
-                        box.Text = icfg.CurrentValue or ""
+                        box.Text = defaultValue
                         box.TextXAlignment = Enum.TextXAlignment.Left
                         box.ClearTextOnFocus = false
                         box.Parent = holder
-                        local defaultText = box.Text
 
                         local obj = { CurrentValue = box.Text }
                         box.Focused:Connect(function()
@@ -2722,8 +2780,7 @@ function Library:CreateWindow(cfg)
                                 obj.CurrentValue = text
                         end
                         function obj:Get() return box.Text end
-                        function obj:Reset() obj:Set(defaultText) end
-                        registerFocusable(tab, holder, strk, function() box:CaptureFocus() end)
+                        function obj:Reset() obj:Set(defaultValue) end
                         onTheme(function()
                                 Tween(holder, T20, { BackgroundColor3 = C.panel })
                                 Tween(strk, T20, { Color = C.border })
@@ -2749,6 +2806,22 @@ function Library:CreateWindow(cfg)
                         local callback = dcfg.Callback
                         local searchable = dcfg.Searchable == true
 
+                        -- A subsequence matcher makes large menus practical:
+                        -- "spd" matches "Speed", "Movement Speed", and
+                        -- "Speed Boost" without weakening exact search.
+                        local function fuzzyMatch(candidate, query)
+                                if query == "" then return true end
+                                if candidate:find(query, 1, true) then return true end
+                                local needleIndex = 1
+                                for index = 1, #candidate do
+                                        if candidate:sub(index, index) == query:sub(needleIndex, needleIndex) then
+                                                needleIndex = needleIndex + 1
+                                                if needleIndex > #query then return true end
+                                        end
+                                end
+                                return false
+                        end
+
                         local selected = {} -- set: option -> true
                         do
                                 local cur = dcfg.CurrentOption
@@ -2759,6 +2832,10 @@ function Library:CreateWindow(cfg)
                                 elseif not multi and options[1] then
                                         selected[options[1]] = true
                                 end
+                        end
+                        local defaultSelection = {}
+                        for option, isSelected in pairs(selected) do
+                                if isSelected then defaultSelection[option] = true end
                         end
 
                         local holder, hStroke = makeHolder(42)
@@ -2782,6 +2859,16 @@ function Library:CreateWindow(cfg)
                         arrow.TextColor3 = C.muted
                         arrow.Text = "▾"
                         arrow.Parent = holder
+
+                        local hit = Instance.new("TextButton")
+                        hit.Size = UDim2.new(1, 0, 1, 0)
+                        hit.BackgroundTransparency = 1
+                        hit.BorderSizePixel = 0
+                        hit.AutoButtonColor = false
+                        hit.Text = ""
+                        hit.ZIndex = 5
+                        hit.Selectable = true
+                        hit.Parent = holder
 
                         local obj = {}
                         local function selectionList()
@@ -2933,7 +3020,7 @@ function Library:CreateWindow(cfg)
                                                 item.MouseLeave:Connect(function()
                                                         Tween(item, T10, { BackgroundColor3 = C.panelAlt })
                                                 end)
-                                                item.MouseButton1Click:Connect(function()
+                                                item.Activated:Connect(function()
                                                         if multi then
                                                                 selected[opt] = not selected[opt] or nil
                                                                 check.Text = selected[opt] and "✓" or ""
@@ -2955,7 +3042,7 @@ function Library:CreateWindow(cfg)
                                                 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
                                                         local query = searchBox.Text:lower()
                                                         for _, entry in ipairs(itemFrames) do
-                                                                local match = query == "" or fuzzyMatch(query, entry.text)
+                                                                local match = fuzzyMatch(entry.text, query)
                                                                 entry.frame.Visible = match
                                                         end
                                                 end)
@@ -2974,7 +3061,7 @@ function Library:CreateWindow(cfg)
                                         catcher.Visible = false  -- hidden until delay
                                         catcher.Parent = screenGui
 
-                                        catcher.MouseButton1Click:Connect(closeCurrentPopup)
+                                        catcher.Activated:Connect(closeCurrentPopup)
 
                                         local pj = Janitor.new()
                                         pj:Add(catcher)
@@ -2991,12 +3078,7 @@ function Library:CreateWindow(cfg)
                                         end)
                                 end
 
-                        holder.InputBegan:Connect(function(inp)
-                                if inp.UserInputType == Enum.UserInputType.MouseButton1
-                                        or inp.UserInputType == Enum.UserInputType.Touch then
-                                        openList()
-                                end
-                        end)
+                        hit.Activated:Connect(openList)
 
                         function obj:Set(optionOrList, silent)
                                 table.clear(selected)
@@ -3026,10 +3108,17 @@ function Library:CreateWindow(cfg)
                                 obj.CurrentOption = multi and selectionList() or selectionList()[1]
                         end
                         function obj:Get() return obj.CurrentOption end
-                        do
-                                local defaultSelection = multi and selectionList() or selectionList()[1]
-                                function obj:Reset() obj:Set(defaultSelection) end
-                                registerFocusable(tab, holder, hStroke, openList)
+                        function obj:Reset()
+                                local restored = {}
+                                for option, isSelected in pairs(defaultSelection) do
+                                        if isSelected then table.insert(restored, option) end
+                                end
+                                if multi then
+                                        obj:Set(restored)
+                                else
+                                        obj:Set(restored[1])
+                                end
+                                return obj.CurrentOption
                         end
 
                         onTheme(function()
@@ -3055,13 +3144,14 @@ function Library:CreateWindow(cfg)
                         kcfg = kcfg or {}
                         local nameText = kcfg.Name or "Keybind"
                         local callback = kcfg.Callback
+                        local changedCallback = kcfg.ChangedCallback or kcfg.OnChanged
                         local hold     = kcfg.HoldToInteract == true
                         local bound    = kcfg.CurrentKeybind -- Enum.KeyCode or string
                         if type(bound) == "string" then
                                 local ok, kc = pcall(function() return Enum.KeyCode[bound] end)
                                 bound = ok and kc or nil
                         end
-                        local defaultBound = bound
+                        local defaultKey = bound
                         local listening = false
 
                         local holder, hStroke = makeHolder(38)
@@ -3083,6 +3173,7 @@ function Library:CreateWindow(cfg)
                         pill.Text = ""
                         pill.AutoButtonColor = false
                         pill.BorderSizePixel = 0
+                        pill.Selectable = true
                         pill.Parent = holder
                         corner(pill, R.pill)
                         local pillStroke = stroke(pill, C.accentDim, 1)
@@ -3107,6 +3198,10 @@ function Library:CreateWindow(cfg)
                                 if newKey ~= nil then
                                         bound = newKey
                                         obj.CurrentKeybind = bound
+                                        if changedCallback then
+                                                local ok, err = pcall(changedCallback, bound, obj)
+                                                if not ok then warn("[RezurXLib] Keybind change callback failed:", err) end
+                                        end
                                 end
                                 keyLbl.Text = keyName(bound)
                                 Tween(pill, T15, { BackgroundColor3 = C.accentDark })
@@ -3123,7 +3218,7 @@ function Library:CreateWindow(cfg)
                                         Tween(pill, T10, { BackgroundColor3 = C.accentDark })
                                 end
                         end)
-                        pill.MouseButton1Click:Connect(function()
+                        pill.Activated:Connect(function()
                                 if listening then
                                         stopListening(nil)
                                         return
@@ -3143,7 +3238,7 @@ function Library:CreateWindow(cfg)
                                 rebindCatcher.Active = true
                                 rebindCatcher.ZIndex = 1000
                                 rebindCatcher.Parent = screenGui
-                                rebindCatcher.MouseButton1Click:Connect(function()
+                                rebindCatcher.Activated:Connect(function()
                                         stopListening(nil)
                                 end)
                         end)
@@ -3195,7 +3290,7 @@ function Library:CreateWindow(cfg)
                                 keyLbl.Text = keyName(bound)
                         end
                         function obj:Get() return bound end
-                        function obj:Reset() obj:Set(defaultBound) end
+                        function obj:Reset() obj:Set(defaultKey) end
 
                         onTheme(function()
                                 Tween(holder, T20, { BackgroundColor3 = C.panel })
@@ -3216,6 +3311,7 @@ function Library:CreateWindow(cfg)
                         ccfg = ccfg or {}
                         local nameText = ccfg.Name or "Color"
                         local callback = ccfg.Callback
+                        local presets = type(ccfg.Presets) == "table" and ccfg.Presets or {}
 
                         local holder, hStroke = makeHolder(42)
                         local lbl = Instance.new("TextLabel")
@@ -3236,6 +3332,7 @@ function Library:CreateWindow(cfg)
                         swatch.Text = ""
                         swatch.AutoButtonColor = false
                         swatch.BorderSizePixel = 0
+                        swatch.Selectable = true
                         swatch.Parent = holder
                         corner(swatch, R.small)
                         stroke(swatch, C.border, 1.5)
@@ -3261,18 +3358,12 @@ function Library:CreateWindow(cfg)
                                 local sp = swatch.AbsolutePosition
                                 local cam = workspace.CurrentCamera
                                 local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-                                -- Presets add a swatch row below the hue slider. Only
-                                -- grow the panel when Presets is actually supplied so
-                                -- pickers without it look pixel-identical to before.
-                                local presets = type(ccfg.Presets) == "table" and ccfg.Presets or nil
-                                local hasPresets = presets ~= nil and #presets > 0
-                                local presetShift = hasPresets and 40 or 0
-                                local panelH = 280 + presetShift
-                                local px = math.clamp(sp.X - 160, 10, vp.X - 280)
-                                local py = math.clamp(sp.Y - (panelH - 10), 10, vp.Y - (panelH + 10))
+                                local panelHeight = #presets > 0 and 316 or 280
+                                local px = math.clamp(sp.X - 160, 10, math.max(10, vp.X - 280))
+                                local py = math.clamp(sp.Y - panelHeight + 10, 10, math.max(10, vp.Y - panelHeight - 10))
 
                                 local panel = Instance.new("Frame")
-                                panel.Size = UDim2.new(0, 270, 0, panelH)
+                                panel.Size = UDim2.new(0, 270, 0, panelHeight)
                                 panel.Position = UDim2.new(0, px, 0, py)
                                 panel.BackgroundColor3 = C.panel
                                 panel.BorderSizePixel = 0
@@ -3389,7 +3480,7 @@ function Library:CreateWindow(cfg)
                                 -- Hex display
                                 local hexLbl = Instance.new("TextLabel")
                                 hexLbl.Size = UDim2.new(0, 120, 0, 20)
-                                hexLbl.Position = UDim2.new(0, 14, 0, 225 + presetShift)
+                                hexLbl.Position = UDim2.new(0, 14, 0, 225)
                                 hexLbl.BackgroundTransparency = 1
                                 hexLbl.Font = Enum.Font.Code
                                 hexLbl.TextSize = 12
@@ -3401,7 +3492,7 @@ function Library:CreateWindow(cfg)
                                 -- Done button
                                 local doneBtn = Instance.new("TextButton")
                                 doneBtn.Size = UDim2.new(0, 80, 0, 28)
-                                doneBtn.Position = UDim2.new(1, -92, 0, 240 + presetShift)
+                                doneBtn.Position = UDim2.new(1, -92, 0, #presets > 0 and 278 or 240)
                                 doneBtn.BackgroundColor3 = C.accent
                                 doneBtn.Text = "Done"
                                 doneBtn.Font = Enum.Font.GothamBold
@@ -3427,54 +3518,46 @@ function Library:CreateWindow(cfg)
                                         end
                                 update()
 
-                                if hasPresets then
-                                        local capLbl = Instance.new("TextLabel")
-                                        capLbl.Size = UDim2.new(1, -28, 0, 12)
-                                        capLbl.Position = UDim2.new(0, 14, 0, 220)
-                                        capLbl.BackgroundTransparency = 1
-                                        capLbl.Font = Enum.Font.GothamMedium
-                                        capLbl.TextSize = 10
-                                        capLbl.TextColor3 = C.muted
-                                        capLbl.TextXAlignment = Enum.TextXAlignment.Left
-                                        capLbl.Text = "PRESETS"
-                                        capLbl.ZIndex = 9
-                                        capLbl.Parent = panel
-
-                                        local swSize, gap = 20, 6
-                                        for i, presetColor in ipairs(presets) do
-                                                local pBtn = Instance.new("TextButton")
-                                                pBtn.Size = UDim2.new(0, swSize, 0, swSize)
-                                                pBtn.Position = UDim2.new(0, 14 + (i - 1) * (swSize + gap), 0, 234)
-                                                pBtn.BackgroundColor3 = presetColor
-                                                pBtn.Text = ""
-                                                pBtn.AutoButtonColor = false
-                                                pBtn.BorderSizePixel = 0
-                                                pBtn.ZIndex = 9
-                                                pBtn.Parent = panel
-                                                corner(pBtn, R.small)
-                                                local pStroke = stroke(pBtn, C.border, 1)
-                                                pBtn.MouseEnter:Connect(function() Tween(pStroke, T10, { Color = C.accent }) end)
-                                                pBtn.MouseLeave:Connect(function() Tween(pStroke, T10, { Color = C.border }) end)
-                                                pBtn.MouseButton1Click:Connect(function()
-                                                        h, s, v = presetColor:ToHSV()
-                                                        update()
-                                                end)
+                                -- Optional presets provide fast, predictable choices
+                                -- without making users hunt through the HSV surface.
+                                if #presets > 0 then
+                                        local presetCount = math.min(#presets, 8)
+                                        for index = 1, presetCount do
+                                                local preset = presets[index]
+                                                if typeof(preset) == "Color3" then
+                                                        local presetButton = Instance.new("TextButton")
+                                                        presetButton.Size = UDim2.new(0, 25, 0, 20)
+                                                        presetButton.Position = UDim2.new(0, 14 + (index - 1) * 29, 0, 248)
+                                                        presetButton.BackgroundColor3 = preset
+                                                        presetButton.BorderSizePixel = 0
+                                                        presetButton.Text = ""
+                                                        presetButton.AutoButtonColor = false
+                                                        presetButton.ZIndex = 10
+                                                        presetButton.Parent = panel
+                                                        presetButton.Selectable = true
+                                                        corner(presetButton, 5)
+                                                        stroke(presetButton, C.border, 1)
+                                                        presetButton.Activated:Connect(function()
+                                                                h, s, v = preset:ToHSV()
+                                                                update()
+                                                        end)
+                                                end
                                         end
                                 end
 
                                 -- Pad drag — uses InputBegan for mouse+touch support
                                 pad.InputBegan:Connect(function(inp)
                                         if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-                                                registerDrag(pad, function(pos)
-                                                        local px2 = math.clamp((pos.X - pad.AbsolutePosition.X) / pad.AbsoluteSize.X, 0, 1)
-                                                        local py2 = math.clamp((pos.Y - pad.AbsolutePosition.Y) / pad.AbsoluteSize.Y, 0, 1)
+                                                registerDrag(pad, inp, function(pos)
+                                                        local px2 = math.clamp((pos.X - pad.AbsolutePosition.X) / math.max(pad.AbsoluteSize.X, 1), 0, 1)
+                                                        local py2 = math.clamp((pos.Y - pad.AbsolutePosition.Y) / math.max(pad.AbsoluteSize.Y, 1), 0, 1)
                                                         s = px2
                                                         v = 1 - py2
                                                         update()
                                                 end)
                                                 -- Set initial position
-                                                s = math.clamp((inp.Position.X - pad.AbsolutePosition.X) / pad.AbsoluteSize.X, 0, 1)
-                                                v = 1 - math.clamp((inp.Position.Y - pad.AbsolutePosition.Y) / pad.AbsoluteSize.Y, 0, 1)
+                                                s = math.clamp((inp.Position.X - pad.AbsolutePosition.X) / math.max(pad.AbsoluteSize.X, 1), 0, 1)
+                                                v = 1 - math.clamp((inp.Position.Y - pad.AbsolutePosition.Y) / math.max(pad.AbsoluteSize.Y, 1), 0, 1)
                                                 update()
                                         end
                                 end)
@@ -3482,11 +3565,11 @@ function Library:CreateWindow(cfg)
                                 -- Hue slider drag — uses InputBegan for mouse+touch
                                 hueSlider.InputBegan:Connect(function(inp)
                                         if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-                                                registerDrag(hueSlider, function(pos)
-                                                        h = math.clamp((pos.X - hueSlider.AbsolutePosition.X) / hueSlider.AbsoluteSize.X, 0, 1)
+                                                registerDrag(hueSlider, inp, function(pos)
+                                                        h = math.clamp((pos.X - hueSlider.AbsolutePosition.X) / math.max(hueSlider.AbsoluteSize.X, 1), 0, 1)
                                                         update()
                                                 end)
-                                                h = math.clamp((inp.Position.X - hueSlider.AbsolutePosition.X) / hueSlider.AbsoluteSize.X, 0, 1)
+                                                h = math.clamp((inp.Position.X - hueSlider.AbsolutePosition.X) / math.max(hueSlider.AbsoluteSize.X, 1), 0, 1)
                                                 update()
                                         end
                                 end)
@@ -3496,8 +3579,8 @@ function Library:CreateWindow(cfg)
                                 -- never tracked, so opening a different popup while the color
                                 -- picker was open left its full-screen catcher + panel stuck on
                                 -- screen permanently. Same Janitor fix applied here.
-                                doneBtn.MouseButton1Click:Connect(closeCurrentPopup)
-                                catcher.MouseButton1Click:Connect(closeCurrentPopup)
+                                doneBtn.Activated:Connect(closeCurrentPopup)
+                                catcher.Activated:Connect(closeCurrentPopup)
 
                                 local pj = Janitor.new()
                                 pj:Add(catcher)
@@ -3505,7 +3588,7 @@ function Library:CreateWindow(cfg)
                                 currentPopupJanitor = pj
                         end
 
-                        swatch.MouseButton1Click:Connect(openPicker)
+                        swatch.Activated:Connect(openPicker)
 
                         function obj:Set(color)
                                 obj.Color = color
@@ -3513,8 +3596,9 @@ function Library:CreateWindow(cfg)
                                 if callback then pcall(callback, color) end
                         end
                         function obj:Get() return obj.Color end
-                        function obj:Reset() obj:Set(defaultColor) end
-                        registerFocusable(tab, holder, hStroke, openPicker)
+                        function obj:Reset()
+                                self:Set(defaultColor)
+                        end
 
                         onTheme(function()
                                 Tween(holder, T20, { BackgroundColor3 = C.panel })
@@ -3547,6 +3631,7 @@ function Library:CreateWindow(cfg)
                         headerBtn.Text = ""
                         headerBtn.AutoButtonColor = false
                         headerBtn.BorderSizePixel = 0
+                        headerBtn.Selectable = true
                         headerBtn.Parent = page
                         corner(headerBtn, R.panel)
                         local accStroke = stroke(headerBtn, C.border, 1)
@@ -3604,7 +3689,7 @@ function Library:CreateWindow(cfg)
                         end
                         function obj:Toggle() obj:SetExpanded(not expanded) end
                         function obj:GetContainer() return container end
-                        headerBtn.MouseButton1Click:Connect(function() obj:Toggle() end)
+                        headerBtn.Activated:Connect(function() obj:Toggle() end)
                         headerBtn.MouseEnter:Connect(function() Tween(headerBtn, T10, { BackgroundColor3 = C.panelHov }) end)
                         headerBtn.MouseLeave:Connect(function() Tween(headerBtn, T10, { BackgroundColor3 = C.panelAlt }) end)
                         onTheme(function()
@@ -3678,8 +3763,9 @@ function Library:CreateWindow(cfg)
                         enHit.Text = ""
                         enHit.AutoButtonColor = false
                         enHit.ZIndex = 10
+                        enHit.Selectable = true
                         enHit.Parent = holder
-                        enHit.MouseButton1Click:Connect(function()
+                        enHit.Activated:Connect(function()
                                 enabled = not enabled
                                 obj.Enabled = enabled
                                 updateState()
@@ -3691,7 +3777,6 @@ function Library:CreateWindow(cfg)
                                 if inp.KeyCode == bound and callback then pcall(callback, enabled) end
                         end))
                         function obj:SetEnabled(v) enabled = v obj.Enabled = v updateState() end
-                        registerFocusable(tab, holder, hStroke, function() obj:SetEnabled(not enabled) end)
                         function obj:SetKeybind(kc) bound = kc obj.Keybind = kc pill.Text = keyName(kc) end
                         onTheme(function()
                                 Tween(holder, T20, { BackgroundColor3 = C.panel })
@@ -3875,6 +3960,7 @@ function Library:CreateWindow(cfg)
                                 Suffix = pcfg.Suffix or "%",
                         }
                         if obj.Max <= obj.Min then obj.Max = obj.Min + 1 end
+                        local defaultValue = obj.CurrentValue
 
                         local function render(animated)
                                 obj.CurrentValue = math.clamp(obj.CurrentValue, obj.Min, obj.Max)
@@ -3911,6 +3997,14 @@ function Library:CreateWindow(cfg)
 
                         function obj:Increment(amount, silent)
                                 return obj:Set(obj.CurrentValue + (tonumber(amount) or 1), silent)
+                        end
+
+                        function obj:Get()
+                                return obj.CurrentValue
+                        end
+
+                        function obj:Reset()
+                                return obj:Set(defaultValue)
                         end
 
                         function obj:Destroy()
@@ -4058,6 +4152,7 @@ function Library:CreateWindow(cfg)
                         copyButton.TextColor3 = C.accentHi
                         copyButton.Text = "COPY"
                         copyButton.ZIndex = 3
+                        copyButton.Selectable = true
                         copyButton.Parent = holder
                         corner(copyButton, R.small)
                         local copyStroke = stroke(copyButton, C.border, 1)
@@ -4141,7 +4236,7 @@ function Library:CreateWindow(cfg)
                         copyButton.MouseLeave:Connect(function()
                                 Tween(copyButton, T10, { BackgroundColor3 = C.panelAlt })
                         end)
-                        copyButton.MouseButton1Click:Connect(function() obj:Copy() end)
+                        copyButton.Activated:Connect(function() obj:Copy() end)
 
                         render()
                         onTheme(render)
@@ -4272,6 +4367,7 @@ function Library:CreateWindow(cfg)
                                 row.BackgroundColor3 = rowBackground(index)
                                 row.BorderSizePixel = 0
                                 row.AutoButtonColor = false
+                                row.Selectable = true
                                 row.Text = ""
                                 row.LayoutOrder = index
                                 row.ZIndex = 2
@@ -4311,7 +4407,7 @@ function Library:CreateWindow(cfg)
                                 row.MouseLeave:Connect(function()
                                         Tween(row, T10, { BackgroundColor3 = rowBackground(index) })
                                 end)
-                                row.MouseButton1Click:Connect(function()
+                                row.Activated:Connect(function()
                                         if tcfg.OnRowActivated then
                                                 pcall(tcfg.OnRowActivated, values, index, entry)
                                         end
@@ -4402,6 +4498,7 @@ function Library:CreateWindow(cfg)
                 function tab:CreateTextArea(acfg)
                         acfg = acfg or {}
                         local areaHeight = math.clamp(tonumber(acfg.Height) or 142, 92, 300)
+                        local defaultValue = tostring(acfg.CurrentValue or acfg.Text or "")
                         local holder, hStroke = makeHolder(areaHeight)
                         holder.Name = "TextArea"
 
@@ -4452,10 +4549,9 @@ function Library:CreateWindow(cfg)
                         box.TextColor3 = C.text
                         box.PlaceholderColor3 = C.muted
                         box.PlaceholderText = acfg.PlaceholderText or acfg.Placeholder or ""
-                        box.Text = acfg.CurrentValue or acfg.Text or ""
+                        box.Text = defaultValue
                         box.ZIndex = 3
                         box.Parent = inputSurface
-                        local defaultText = box.Text
 
                         local obj = {
                                 Name = acfg.Name or acfg.Title or "Text area",
@@ -4520,15 +4616,13 @@ function Library:CreateWindow(cfg)
                                 return obj:Set("", silent)
                         end
 
+                        function obj:Reset()
+                                return obj:Set(defaultValue)
+                        end
+
                         function obj:Focus()
                                 if not obj.Disabled then box:CaptureFocus() end
                         end
-
-                        function obj:Reset(silent)
-                                return obj:Set(defaultText, silent)
-                        end
-
-                        registerFocusable(tab, holder, hStroke, function() obj:Focus() end)
 
                         function obj:SetDisabled(disabled)
                                 obj.Disabled = disabled == true
@@ -4567,6 +4661,403 @@ function Library:CreateWindow(cfg)
                         return obj
                 end
 
+                -- A spinner only consumes animation work while it is running.
+                -- It is suitable for short, visible waits rather than a hidden
+                -- always-on decorative loop.
+                function tab:CreateSpinner(scfg)
+                        scfg = scfg or {}
+                        local holder, hStroke = makeHolder(scfg.Height or 50)
+                        holder.Name = "Spinner"
+
+                        local orbit = Instance.new("Frame")
+                        orbit.Size = UDim2.new(0, 24, 0, 24)
+                        orbit.Position = UDim2.new(0, 14, 0.5, -12)
+                        orbit.BackgroundTransparency = 1
+                        orbit.ZIndex = 2
+                        orbit.Parent = holder
+                        local ring = Instance.new("Frame")
+                        ring.Size = UDim2.new(0, 16, 0, 16)
+                        ring.Position = UDim2.new(0.5, -8, 0.5, -8)
+                        ring.BackgroundTransparency = 1
+                        ring.ZIndex = 2
+                        ring.Parent = orbit
+                        corner(ring, UDim.new(1, 0))
+                        local ringStroke = stroke(ring, C.accentDim, 2)
+                        local dot = Instance.new("Frame")
+                        dot.Size = UDim2.new(0, 6, 0, 6)
+                        dot.Position = UDim2.new(0.5, -3, 0, 0)
+                        dot.BackgroundColor3 = C.accentHi
+                        dot.BorderSizePixel = 0
+                        dot.ZIndex = 3
+                        dot.Parent = orbit
+                        corner(dot, UDim.new(1, 0))
+
+                        local label = Instance.new("TextLabel")
+                        label.Size = UDim2.new(1, -54, 0, 18)
+                        label.Position = UDim2.new(0, 48, 0, 8)
+                        label.BackgroundTransparency = 1
+                        label.Font = Enum.Font.GothamMedium
+                        label.TextSize = 12
+                        label.TextColor3 = C.text
+                        label.TextXAlignment = Enum.TextXAlignment.Left
+                        label.TextTruncate = Enum.TextTruncate.AtEnd
+                        label.ZIndex = 2
+                        label.Parent = holder
+                        local detail = Instance.new("TextLabel")
+                        detail.Size = UDim2.new(1, -54, 0, 15)
+                        detail.Position = UDim2.new(0, 48, 0, 26)
+                        detail.BackgroundTransparency = 1
+                        detail.Font = Enum.Font.Gotham
+                        detail.TextSize = 10
+                        detail.TextColor3 = C.muted
+                        detail.TextXAlignment = Enum.TextXAlignment.Left
+                        detail.TextTruncate = Enum.TextTruncate.AtEnd
+                        detail.ZIndex = 2
+                        detail.Parent = holder
+
+                        local obj = {
+                                Name = scfg.Name or scfg.Title or "Loading",
+                                Detail = scfg.Detail or scfg.Content or "Please wait",
+                                Running = false,
+                                _tween = nil,
+                        }
+                        local function render()
+                                label.Text = obj.Name
+                                detail.Text = obj.Detail
+                                Tween(holder, T20, { BackgroundColor3 = C.panel })
+                                Tween(hStroke, T20, { Color = C.border })
+                                Tween(ringStroke, T20, { Color = C.accentDim })
+                                Tween(dot, T20, { BackgroundColor3 = C.accentHi })
+                                Tween(label, T20, { TextColor3 = C.text })
+                                Tween(detail, T20, { TextColor3 = C.muted })
+                        end
+                        function obj:Start()
+                                if obj.Running then return obj end
+                                obj.Running = true
+                                orbit.Rotation = 0
+                                local ok, animation = pcall(function()
+                                        return TweenService:Create(orbit, TweenInfo.new(0.9, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), { Rotation = 360 })
+                                end)
+                                if ok and animation then
+                                        obj._tween = animation
+                                        animation:Play()
+                                end
+                                return obj
+                        end
+                        function obj:Stop()
+                                obj.Running = false
+                                if obj._tween then pcall(function() obj._tween:Cancel() end) end
+                                obj._tween = nil
+                                orbit.Rotation = 0
+                                return obj
+                        end
+                        function obj:Set(nextValue)
+                                if type(nextValue) == "table" then
+                                        obj.Name = nextValue.Name or nextValue.Title or obj.Name
+                                        obj.Detail = nextValue.Detail or nextValue.Content or obj.Detail
+                                        if nextValue.Running ~= nil then
+                                                if nextValue.Running then obj:Start() else obj:Stop() end
+                                        end
+                                else
+                                        obj.Detail = tostring(nextValue or "")
+                                end
+                                render()
+                                return obj
+                        end
+                        function obj:Get()
+                                return { Name = obj.Name, Detail = obj.Detail, Running = obj.Running }
+                        end
+                        function obj:Destroy()
+                                obj:Stop()
+                                holder:Destroy()
+                        end
+                        holder.Destroying:Connect(function() obj:Stop() end)
+                        render()
+                        if scfg.Running ~= false then obj:Start() end
+                        onTheme(render)
+                        applyTooltip(holder, scfg.Tooltip)
+                        registerFlag(scfg.Flag, obj)
+                        return obj
+                end
+
+                -- A carousel is a compact way to rotate through onboarding
+                -- tips, profiles, or previews without adding a full scrolling
+                -- surface to a settings panel.
+                function tab:CreateCarousel(ccfg)
+                        ccfg = ccfg or {}
+                        local holder, hStroke = makeHolder(ccfg.Height or 92)
+                        holder.Name = "Carousel"
+                        local previous = Instance.new("TextButton")
+                        previous.Size = UDim2.new(0, 28, 0, 28)
+                        previous.Position = UDim2.new(0, 12, 0.5, -14)
+                        previous.BackgroundColor3 = C.panelAlt
+                        previous.BorderSizePixel = 0
+                        previous.AutoButtonColor = false
+                        previous.Text = "<"
+                        previous.Font = Enum.Font.GothamBold
+                        previous.TextSize = 15
+                        previous.TextColor3 = C.accentHi
+                        previous.ZIndex = 3
+                        previous.Parent = holder
+                        previous.Selectable = true
+                        corner(previous, R.small)
+                        local previousStroke = stroke(previous, C.border, 1)
+                        local nextButton = previous:Clone()
+                        nextButton.Name = "Next"
+                        nextButton.Position = UDim2.new(1, -40, 0.5, -14)
+                        nextButton.Text = ">"
+                        nextButton.Parent = holder
+                        local nextStroke = nextButton:FindFirstChildOfClass("UIStroke")
+
+                        local title = Instance.new("TextLabel")
+                        title.Size = UDim2.new(1, -104, 0, 21)
+                        title.Position = UDim2.new(0, 52, 0, 16)
+                        title.BackgroundTransparency = 1
+                        title.Font = Enum.Font.GothamBold
+                        title.TextSize = 13
+                        title.TextColor3 = C.text
+                        title.TextXAlignment = Enum.TextXAlignment.Left
+                        title.TextTruncate = Enum.TextTruncate.AtEnd
+                        title.ZIndex = 2
+                        title.Parent = holder
+                        local bodyText = Instance.new("TextLabel")
+                        bodyText.Size = UDim2.new(1, -104, 0, 30)
+                        bodyText.Position = UDim2.new(0, 52, 0, 38)
+                        bodyText.BackgroundTransparency = 1
+                        bodyText.Font = Enum.Font.Gotham
+                        bodyText.TextSize = 11
+                        bodyText.TextColor3 = C.textDim
+                        bodyText.TextXAlignment = Enum.TextXAlignment.Left
+                        bodyText.TextYAlignment = Enum.TextYAlignment.Top
+                        bodyText.TextWrapped = true
+                        bodyText.ZIndex = 2
+                        bodyText.Parent = holder
+                        local counter = Instance.new("TextLabel")
+                        counter.Size = UDim2.new(1, -104, 0, 14)
+                        counter.Position = UDim2.new(0, 52, 1, -20)
+                        counter.BackgroundTransparency = 1
+                        counter.Font = Enum.Font.Code
+                        counter.TextSize = 10
+                        counter.TextColor3 = C.muted
+                        counter.TextXAlignment = Enum.TextXAlignment.Left
+                        counter.ZIndex = 2
+                        counter.Parent = holder
+
+                        local obj = { Items = {}, Index = 1 }
+                        local function normalizeIndex(index)
+                                local count = #obj.Items
+                                if count == 0 then return 0 end
+                                return ((math.floor(tonumber(index) or 1) - 1) % count) + 1
+                        end
+                        local function readItem(item)
+                                if type(item) == "table" then
+                                        return tostring(item.Title or item.Name or item.Text or "Untitled"), tostring(item.Content or item.Description or item.Detail or "")
+                                end
+                                return tostring(item or ""), ""
+                        end
+                        local function render(animated)
+                                local count = #obj.Items
+                                local item = count > 0 and obj.Items[obj.Index] or nil
+                                local headline, copy = readItem(item)
+                                if animated then
+                                        Tween(title, T10, { TextTransparency = 1 })
+                                        Tween(bodyText, T10, { TextTransparency = 1 })
+                                end
+                                title.Text = count > 0 and headline or (ccfg.EmptyText or "No slides")
+                                bodyText.Text = count > 0 and copy or "Add items with :SetItems()."
+                                counter.Text = count > 0 and string.format("%d / %d", obj.Index, count) or "0 / 0"
+                                previous.Visible = count > 1
+                                nextButton.Visible = count > 1
+                                Tween(holder, T20, { BackgroundColor3 = C.panel })
+                                Tween(hStroke, T20, { Color = C.border })
+                                Tween(previous, T20, { BackgroundColor3 = C.panelAlt, TextColor3 = C.accentHi })
+                                Tween(nextButton, T20, { BackgroundColor3 = C.panelAlt, TextColor3 = C.accentHi })
+                                Tween(previousStroke, T20, { Color = C.border })
+                                if nextStroke then Tween(nextStroke, T20, { Color = C.border }) end
+                                Tween(title, T20, { TextColor3 = C.text, TextTransparency = 0 })
+                                Tween(bodyText, T20, { TextColor3 = C.textDim, TextTransparency = 0 })
+                                Tween(counter, T20, { TextColor3 = C.muted })
+                        end
+                        function obj:SetIndex(index, silent)
+                                obj.Index = normalizeIndex(index)
+                                render(true)
+                                if not silent and ccfg.Callback and obj.Index > 0 then
+                                        pcall(ccfg.Callback, obj.Items[obj.Index], obj.Index, obj)
+                                end
+                                return obj.Index
+                        end
+                        function obj:Next(silent)
+                                return obj:SetIndex(obj.Index + 1, silent)
+                        end
+                        function obj:Previous(silent)
+                                return obj:SetIndex(obj.Index - 1, silent)
+                        end
+                        function obj:SetItems(items, silent)
+                                obj.Items = type(items) == "table" and items or {}
+                                obj.Index = normalizeIndex(obj.Index)
+                                render(false)
+                                if not silent and ccfg.Callback and obj.Index > 0 then
+                                        pcall(ccfg.Callback, obj.Items[obj.Index], obj.Index, obj)
+                                end
+                                return obj
+                        end
+                        function obj:Get()
+                                return obj.Items[obj.Index], obj.Index
+                        end
+                        function obj:Destroy()
+                                holder:Destroy()
+                        end
+                        previous.Activated:Connect(function() obj:Previous() end)
+                        nextButton.Activated:Connect(function() obj:Next() end)
+                        obj:SetItems(ccfg.Items or {}, true)
+                        if ccfg.CurrentIndex then obj:SetIndex(ccfg.CurrentIndex, true) end
+                        onTheme(function() render(false) end)
+                        applyTooltip(holder, ccfg.Tooltip)
+                        registerFlag(ccfg.Flag, obj)
+                        return obj
+                end
+
+                -- Context menus are created on demand above the window, so
+                -- they are never clipped by a ScrollingFrame or compete with
+                -- the tab layout for space.
+                function tab:CreateContextMenu(mcfg)
+                        mcfg = mcfg or {}
+                        local holder, hStroke = makeHolder(42)
+                        holder.Name = "ContextMenu"
+                        local label = Instance.new("TextLabel")
+                        label.Size = UDim2.new(1, -126, 1, 0)
+                        label.Position = UDim2.new(0, 14, 0, 0)
+                        label.BackgroundTransparency = 1
+                        label.Font = Enum.Font.GothamMedium
+                        label.TextSize = 13
+                        label.TextColor3 = C.text
+                        label.TextXAlignment = Enum.TextXAlignment.Left
+                        label.TextTruncate = Enum.TextTruncate.AtEnd
+                        label.Parent = holder
+                        local openButton = Instance.new("TextButton")
+                        openButton.Size = UDim2.new(0, 96, 0, 28)
+                        openButton.Position = UDim2.new(1, -106, 0.5, -14)
+                        openButton.BackgroundColor3 = C.panelAlt
+                        openButton.BorderSizePixel = 0
+                        openButton.AutoButtonColor = false
+                        openButton.Font = Enum.Font.GothamBold
+                        openButton.TextSize = 11
+                        openButton.TextColor3 = C.accentHi
+                        openButton.Text = mcfg.ButtonText or "OPTIONS"
+                        openButton.Selectable = true
+                        openButton.Parent = holder
+                        corner(openButton, R.small)
+                        local openStroke = stroke(openButton, C.border, 1)
+                        local obj = { Name = mcfg.Name or mcfg.Title or "Menu", Items = type(mcfg.Items) == "table" and mcfg.Items or {} }
+                        local function closeMenu()
+                                closeCurrentPopup()
+                        end
+                        local function openMenu()
+                                closeCurrentPopup()
+                                local visibleItems = {}
+                                for _, item in ipairs(obj.Items) do
+                                        if type(item) == "table" and item.Hidden ~= true then table.insert(visibleItems, item) end
+                                end
+                                if #visibleItems == 0 then return nil end
+                                local popupHeight = math.min(280, #visibleItems * 34 + 12)
+                                local catcher = Instance.new("TextButton")
+                                catcher.Size = UDim2.new(1, 0, 1, 0)
+                                catcher.BackgroundTransparency = 1
+                                catcher.BorderSizePixel = 0
+                                catcher.AutoButtonColor = false
+                                catcher.Text = ""
+                                catcher.ZIndex = 30
+                                catcher.Parent = screenGui
+                                local camera = workspace.CurrentCamera
+                                local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+                                local origin = openButton.AbsolutePosition
+                                local x = math.clamp(origin.X + openButton.AbsoluteSize.X - 196, 8, math.max(8, viewport.X - 196))
+                                local y = math.clamp(origin.Y + openButton.AbsoluteSize.Y + 6, 8, math.max(8, viewport.Y - popupHeight - 8))
+                                local popup = Instance.new("Frame")
+                                popup.Size = UDim2.new(0, 188, 0, popupHeight)
+                                popup.Position = UDim2.fromOffset(x, y)
+                                popup.BackgroundColor3 = C.panel
+                                popup.BorderSizePixel = 0
+                                popup.ZIndex = 31
+                                popup.Parent = screenGui
+                                corner(popup, R.panel)
+                                local popupStroke = stroke(popup, C.borderAcc, 1)
+                                local layout = Instance.new("UIListLayout")
+                                layout.Padding = UDim.new(0, 3)
+                                layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                                layout.VerticalAlignment = Enum.VerticalAlignment.Center
+                                layout.Parent = popup
+                                for index, item in ipairs(visibleItems) do
+                                        local choice = Instance.new("TextButton")
+                                        choice.Size = UDim2.new(1, -12, 0, 30)
+                                        choice.BackgroundColor3 = C.panelAlt
+                                        choice.BackgroundTransparency = item.Disabled == true and 0.45 or 0
+                                        choice.BorderSizePixel = 0
+                                        choice.AutoButtonColor = false
+                                        choice.Font = Enum.Font.GothamMedium
+                                        choice.TextSize = 12
+                                        choice.TextColor3 = item.Disabled == true and C.muted or C.text
+                                        choice.TextXAlignment = Enum.TextXAlignment.Left
+                                        choice.Text = "  " .. tostring(item.Text or item.Name or ("Option " .. index))
+                                        choice.ZIndex = 32
+                                        choice.Selectable = item.Disabled ~= true
+                                        choice.Parent = popup
+                                        corner(choice, R.small)
+                                        local choiceStroke = stroke(choice, C.border, 1)
+                                        choice.MouseEnter:Connect(function()
+                                                if item.Disabled ~= true then
+                                                        Tween(choice, T10, { BackgroundColor3 = C.panelHov })
+                                                        Tween(choiceStroke, T10, { Color = C.accentDim })
+                                                end
+                                        end)
+                                        choice.MouseLeave:Connect(function()
+                                                Tween(choice, T10, { BackgroundColor3 = C.panelAlt })
+                                                Tween(choiceStroke, T10, { Color = C.border })
+                                        end)
+                                        choice.Activated:Connect(function()
+                                                if item.Disabled == true then return end
+                                                if type(item.Callback) == "function" then
+                                                        task.spawn(function()
+                                                                local ok, err = pcall(item.Callback, item, index, obj)
+                                                                if not ok then warn("[RezurXLib] Context action failed:", err) end
+                                                        end)
+                                                end
+                                                if item.Close ~= false then closeMenu() end
+                                        end)
+                                end
+                                catcher.Activated:Connect(closeMenu)
+                                local popupJanitor = Janitor.new()
+                                popupJanitor:Add(catcher)
+                                popupJanitor:Add(popup)
+                                currentPopupJanitor = popupJanitor
+                                Tween(popup, T15, { BackgroundColor3 = C.panel })
+                                Tween(popupStroke, T15, { Color = C.borderAcc })
+                                return popup
+                        end
+                        function obj:Open() return openMenu() end
+                        function obj:Close() closeMenu() end
+                        function obj:SetItems(items)
+                                obj.Items = type(items) == "table" and items or {}
+                                return obj
+                        end
+                        function obj:Destroy()
+                                closeMenu()
+                                holder:Destroy()
+                        end
+                        label.Text = obj.Name
+                        openButton.Activated:Connect(openMenu)
+                        onTheme(function()
+                                Tween(holder, T20, { BackgroundColor3 = C.panel })
+                                Tween(hStroke, T20, { Color = C.border })
+                                Tween(label, T20, { TextColor3 = C.text })
+                                Tween(openButton, T20, { BackgroundColor3 = C.panelAlt, TextColor3 = C.accentHi })
+                                Tween(openStroke, T20, { Color = C.border })
+                        end)
+                        applyTooltip(holder, mcfg.Tooltip)
+                        registerFlag(mcfg.Flag, obj)
+                        return obj
+                end
+
                 tab.Label = function(_, text) return tab:CreateSection(text) end
                 tab.Divider = function(_, text) return tab:CreateDivider(text) end
                 tab.Button = function(_, n, cb) return tab:CreateButton({ Name = n, Callback = cb }) end
@@ -4590,6 +5081,15 @@ function Library:CreateWindow(cfg)
                 end
                 tab.Progress = function(_, name, value, maximum, callback)
                         return tab:CreateProgress({ Name = name, CurrentValue = value, Max = maximum, Callback = callback })
+                end
+                tab.Spinner = function(_, name, detail)
+                        return tab:CreateSpinner({ Name = name, Detail = detail })
+                end
+                tab.Carousel = function(_, items, callback)
+                        return tab:CreateCarousel({ Items = items, Callback = callback })
+                end
+                tab.ContextMenu = function(_, name, items)
+                        return tab:CreateContextMenu({ Name = name, Items = items })
                 end
                 tab.Status = function(_, name, value, state)
                         return tab:CreateStatus({ Name = name, Value = value, State = state })
@@ -4651,6 +5151,23 @@ function Library:CreateWindow(cfg)
                 return not hidden
         end
 
+        function Window:SetToggleKeybind(nextKey)
+                if type(nextKey) == "string" then
+                        local ok, value = pcall(function() return Enum.KeyCode[nextKey] end)
+                        nextKey = ok and value or nil
+                end
+        if typeof(nextKey) ~= "EnumItem" or nextKey.EnumType ~= Enum.KeyCode then
+                        warn("[RezurXLib] SetToggleKeybind expects an Enum.KeyCode or key name.")
+                        return nil
+                end
+                toggleKey = nextKey
+                return toggleKey
+        end
+
+        function Window:GetToggleKeybind()
+                return toggleKey
+        end
+
         function Window:SetMinimized(nextValue)
                 return setMinimized(nextValue)
         end
@@ -4702,11 +5219,13 @@ function Library:CreateWindow(cfg)
                         return nil
                 end
                 local viewport = getViewport()
-                local x = math.clamp(nextPosition.X, -WIN_W + 100, viewport.X - 100)
+                local scale = math.max(uiScale.Scale, 0.01)
+                local physicalWidth = WIN_W * scale
+                local x = math.clamp(nextPosition.X, -physicalWidth + 100, viewport.X - 100)
                 local y = math.clamp(nextPosition.Y, 0, viewport.Y - 30)
-                frame.Position = UDim2.fromOffset(x, y)
-                shadow.Position = UDim2.fromOffset(x - 18, y - 18)
-                ambientGlow.Position = UDim2.fromOffset(x - 35, y - 35)
+                frame.Position = UDim2.fromOffset(x / scale, y / scale)
+                shadow.Position = UDim2.fromOffset(x / scale - 18, y / scale - 18)
+                ambientGlow.Position = UDim2.fromOffset(x / scale - 35, y / scale - 35)
                 return Vector2.new(x, y)
         end
 
@@ -4734,6 +5253,10 @@ function Library:CreateWindow(cfg)
                 local copy = {}
                 for key, value in pairs(C) do copy[key] = value end
                 return copy
+        end
+
+        function Window:GetThemeName()
+                return activeThemeName
         end
 
         function Window:SetTheme(theme)
@@ -4875,7 +5398,7 @@ function Library:CreateWindow(cfg)
                         local needle = string.lower(input.Text)
                         local count = 0
                         for _, candidate in ipairs(Tabs) do
-                                if needle == "" or fuzzyMatch(needle, string.lower(candidate.Name)) then
+                                if needle == "" or string.find(string.lower(candidate.Name), needle, 1, true) then
                                         count = count + 1
                                         local result = Instance.new("TextButton")
                                         result.Name = "Result"
@@ -4900,7 +5423,7 @@ function Library:CreateWindow(cfg)
                                                 Tween(result, T10, { BackgroundColor3 = C.bg })
                                                 Tween(resultStroke, T10, { Color = C.border })
                                         end)
-                                        result.MouseButton1Click:Connect(function()
+                                        result.Activated:Connect(function()
                                                 candidate._setActive(false)
                                                 closeCommandPalette()
                                         end)
@@ -4933,7 +5456,7 @@ function Library:CreateWindow(cfg)
                                 results.CanvasSize = UDim2.new(0, 0, 0, resultLayout.AbsoluteContentSize.Y + 2)
                         end
                 end))
-                overlay.MouseButton1Click:Connect(closeCommandPalette)
+                overlay.Activated:Connect(closeCommandPalette)
                 refreshResults()
                 task.defer(function()
                         if input.Parent then input:CaptureFocus() end
@@ -4945,6 +5468,207 @@ function Library:CreateWindow(cfg)
 
         function Window:CloseCommandPalette()
                 closeCommandPalette()
+        end
+
+        local modalJanitor = nil
+        local function closeModal()
+                if modalJanitor then
+                        modalJanitor:Cleanup()
+                        modalJanitor = nil
+                end
+        end
+
+        -- Modal dialogs are intentionally explicit: callers receive a handle
+        -- and choose the confirm/cancel callbacks, so destructive actions do
+        -- not hide an irreversible side effect behind a generic notification.
+        function Window:ShowModal(mcfg)
+                mcfg = mcfg or {}
+                closeModal()
+                closeCurrentPopup()
+                local overlay = Instance.new("TextButton")
+                overlay.Name = "ModalOverlay"
+                overlay.Size = UDim2.new(1, 0, 1, 0)
+                overlay.BackgroundColor3 = C.black
+                overlay.BackgroundTransparency = 0.42
+                overlay.BorderSizePixel = 0
+                overlay.AutoButtonColor = false
+                overlay.Text = ""
+                overlay.Active = true
+                overlay.ZIndex = 80
+                overlay.Parent = screenGui
+                local panel = Instance.new("Frame")
+                panel.Name = "Modal"
+                local panelWidth = math.clamp(tonumber(mcfg.Width) or 360, 280, 460)
+                panel.Size = UDim2.new(0, math.floor(panelWidth * 0.94), 0, 172)
+                panel.AnchorPoint = Vector2.new(0.5, 0.5)
+                panel.Position = UDim2.new(0.5, 0, 0.5, 0)
+                panel.BackgroundColor3 = C.panel
+                panel.BorderSizePixel = 0
+                panel.ZIndex = 81
+                panel.Parent = overlay
+                corner(panel, R.outer)
+                local panelStroke = stroke(panel, C.borderAcc, 1)
+                local title = Instance.new("TextLabel")
+                title.Size = UDim2.new(1, -36, 0, 24)
+                title.Position = UDim2.new(0, 18, 0, 16)
+                title.BackgroundTransparency = 1
+                title.Font = Enum.Font.GothamBold
+                title.TextSize = 16
+                title.TextColor3 = C.text
+                title.TextXAlignment = Enum.TextXAlignment.Left
+                title.TextTruncate = Enum.TextTruncate.AtEnd
+                title.Text = tostring(mcfg.Title or "Confirm action")
+                title.ZIndex = 82
+                title.Parent = panel
+                local content = Instance.new("TextLabel")
+                content.Size = UDim2.new(1, -36, 0, 68)
+                content.Position = UDim2.new(0, 18, 0, 50)
+                content.BackgroundTransparency = 1
+                content.Font = Enum.Font.Gotham
+                content.TextSize = 12
+                content.TextColor3 = C.textDim
+                content.TextXAlignment = Enum.TextXAlignment.Left
+                content.TextYAlignment = Enum.TextYAlignment.Top
+                content.TextWrapped = true
+                content.Text = tostring(mcfg.Content or mcfg.Description or "")
+                content.ZIndex = 82
+                content.Parent = panel
+                local cancel = Instance.new("TextButton")
+                cancel.Size = UDim2.new(0, 92, 0, 30)
+                cancel.Position = UDim2.new(1, -202, 1, -46)
+                cancel.BackgroundColor3 = C.panelAlt
+                cancel.BorderSizePixel = 0
+                cancel.AutoButtonColor = false
+                cancel.Font = Enum.Font.GothamBold
+                cancel.TextSize = 12
+                cancel.TextColor3 = C.text
+                cancel.Text = tostring(mcfg.CancelText or "Cancel")
+                cancel.ZIndex = 82
+                cancel.Selectable = true
+                cancel.Parent = panel
+                corner(cancel, R.small)
+                local cancelStroke = stroke(cancel, C.border, 1)
+                local confirm = cancel:Clone()
+                confirm.Name = "Confirm"
+                confirm.Position = UDim2.new(1, -110, 1, -46)
+                confirm.BackgroundColor3 = mcfg.Destructive == true and C.red or C.accent
+                confirm.TextColor3 = C.white
+                confirm.Text = tostring(mcfg.ConfirmText or "Confirm")
+                confirm.Parent = panel
+                local confirmStroke = confirm:FindFirstChildOfClass("UIStroke")
+
+                local obj = { Closed = false }
+                local function close(reason)
+                        if obj.Closed then return end
+                        obj.Closed = true
+                        closeModal()
+                        if type(mcfg.ClosedCallback) == "function" then
+                                task.spawn(function()
+                                        local ok, err = pcall(mcfg.ClosedCallback, reason, obj)
+                                        if not ok then warn("[RezurXLib] Modal close callback failed:", err) end
+                                end)
+                        end
+                end
+                function obj:Close(reason) close(reason or "closed") end
+                function obj:Confirm()
+                        if type(mcfg.ConfirmCallback) == "function" then
+                                task.spawn(function()
+                                        local ok, err = pcall(mcfg.ConfirmCallback, obj)
+                                        if not ok then warn("[RezurXLib] Modal confirm callback failed:", err) end
+                                end)
+                        end
+                        if mcfg.CloseOnConfirm ~= false then close("confirmed") end
+                end
+                function obj:Cancel()
+                        if type(mcfg.CancelCallback) == "function" then
+                                task.spawn(function()
+                                        local ok, err = pcall(mcfg.CancelCallback, obj)
+                                        if not ok then warn("[RezurXLib] Modal cancel callback failed:", err) end
+                                end)
+                        end
+                        close("cancelled")
+                end
+                cancel.Activated:Connect(function() obj:Cancel() end)
+                confirm.Activated:Connect(function() obj:Confirm() end)
+                overlay.InputBegan:Connect(function(input)
+                        if mcfg.Dismissable == false then return end
+                        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                        local p, s, point = panel.AbsolutePosition, panel.AbsoluteSize, input.Position
+                        if point.X < p.X or point.X > p.X + s.X or point.Y < p.Y or point.Y > p.Y + s.Y then obj:Cancel() end
+                end)
+                modalJanitor = Janitor.new()
+                modalJanitor:Add(overlay)
+                Tween(panel, TPOP, { Size = UDim2.new(0, panelWidth, 0, 188) })
+                Tween(panelStroke, T20, { Color = C.borderAcc })
+                Tween(title, T20, { TextColor3 = C.text })
+                Tween(content, T20, { TextColor3 = C.textDim })
+                Tween(cancel, T20, { BackgroundColor3 = C.panelAlt, TextColor3 = C.text })
+                Tween(cancelStroke, T20, { Color = C.border })
+                if confirmStroke then Tween(confirmStroke, T20, { Color = mcfg.Destructive == true and C.red or C.accent }) end
+                return obj
+        end
+
+        function Window:CloseModal()
+                closeModal()
+        end
+
+        local settingsTab = nil
+        -- A compact built-in settings tab exposes the preferences that matter
+        -- to end users without forcing each project to recreate them.
+        function Window:CreateSettingsPanel(scfg)
+                scfg = scfg or {}
+                if settingsTab then return settingsTab end
+                settingsTab = Window:CreateTab(scfg.Name or "Settings", scfg.Icon or "S")
+                settingsTab:CreateSection("Appearance")
+                settingsTab:CreateDropdown({
+                        Name = "Theme",
+                        Options = Library:GetThemeNames(),
+                        CurrentOption = Window:GetThemeName(),
+                        Searchable = true,
+                        Callback = function(themeName)
+                                Window:ModifyTheme(themeName)
+                        end,
+                })
+                settingsTab:CreateToggle({
+                        Name = "Reduce motion",
+                        CurrentValue = reducedMotion,
+                        Callback = function(value)
+                                Window:SetReducedMotion(value)
+                        end,
+                })
+                settingsTab:CreateSlider({
+                        Name = "Motion speed",
+                        Range = { 0.25, 1.5 },
+                        Increment = 0.05,
+                        CurrentValue = motionScale,
+                        Suffix = "x",
+                        Callback = function(value)
+                                Window:SetMotionScale(value)
+                        end,
+                })
+                settingsTab:CreateKeybind({
+                        Name = "Toggle UI shortcut",
+                        CurrentKeybind = toggleKey,
+                        ChangedCallback = function(key)
+                                Window:SetToggleKeybind(key)
+                        end,
+                })
+                settingsTab:CreateSection("Window")
+                settingsTab:CreateInput({
+                        Name = "Status text",
+                        CurrentValue = sTxt.Text,
+                        PlaceholderText = "READY",
+                        Callback = function(value)
+                                Window:SetStatus(value)
+                        end,
+                })
+                settingsTab:CreateButton({
+                        Name = "Minimize window",
+                        Callback = function()
+                                Window:SetMinimized(true)
+                        end,
+                })
+                return settingsTab
         end
 
         WindowJanitor:Add(UserInputService.InputBegan:Connect(function(inp, gp)
@@ -4963,13 +5687,40 @@ function Library:CreateWindow(cfg)
                 end
         end))
 
+        -- Tab, Enter, and slider arrows make the main controls usable without
+        -- a mouse. Native text entry keeps priority whenever a TextBox owns
+        -- focus, preventing shortcuts from hijacking typing.
+        WindowJanitor:Add(UserInputService.InputBegan:Connect(function(inp, gp)
+                if gp or UserInputService:GetFocusedTextBox() then return end
+                if inp.KeyCode == Enum.KeyCode.Tab then
+                        local reverse = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+                                or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+                        Window:FocusNext(reverse)
+                        return
+                end
+                local selected = GuiService.SelectedObject
+                if not selected or not selected:IsDescendantOf(screenGui) then return end
+                local adjuster = keyboardAdjusters[selected]
+                if adjuster and (inp.KeyCode == Enum.KeyCode.Left or inp.KeyCode == Enum.KeyCode.Down) then
+                        adjuster(-1)
+                        return
+                elseif adjuster and (inp.KeyCode == Enum.KeyCode.Right or inp.KeyCode == Enum.KeyCode.Up) then
+                        adjuster(1)
+                        return
+                end
+                if inp.KeyCode == Enum.KeyCode.Return or inp.KeyCode == Enum.KeyCode.KeypadEnter or inp.KeyCode == Enum.KeyCode.Space then
+                        if selected:IsA("GuiButton") then pcall(function() selected:Activate() end) end
+                end
+        end))
+
         -- ------------------------------------------------------------
         -- Destroy
         -- ------------------------------------------------------------
         function Window:Destroy()
                 closeCurrentPopup()
                 closeCommandPalette()
-                table.clear(DragHandlers)  -- clear stale drag handlers
+                closeModal()
+                finishDrag("destroyed")
                 WindowJanitor:Cleanup()
                 for index = #Library._windows, 1, -1 do
                         if Library._windows[index] == Window then
@@ -4987,7 +5738,7 @@ function Library:CreateWindow(cfg)
 end
 
 -- ============================================================
--- LIBRARY-LEVEL API (Rayfield-style)
+-- LIBRARY-LEVEL API
 -- ============================================================
 function Library:Notify(cfg)
         if Library._lastWindow then
@@ -5000,6 +5751,73 @@ function Library:ModifyTheme(theme)
         for _, w in ipairs(Library._windows) do
                 w:ModifyTheme(theme)
         end
+end
+
+-- Registers an immutable-by-convention palette name. Missing tokens inherit
+-- from Quiet, so a custom theme can override only the colours it owns.
+function Library:RegisterTheme(name, palette)
+        if type(name) ~= "string" or name == "" or type(palette) ~= "table" then
+                warn("[RezurXLib] RegisterTheme expects a non-empty name and a palette table.")
+                return nil
+        end
+        local merged = cloneTheme(Themes.Quiet)
+        for key, value in pairs(palette) do
+                if ThemeTokenSet[key] and typeof(value) == "Color3" then
+                        merged[key] = value
+                else
+                        warn("[RezurXLib] Ignoring invalid theme token: " .. tostring(key))
+                end
+        end
+        Themes[name] = merged
+        return cloneTheme(merged)
+end
+
+function Library:GetTheme(name)
+        local palette = Themes[name]
+        return palette and cloneTheme(palette) or nil
+end
+
+-- A tiny local image registry avoids repeated asset-id plumbing. It performs
+-- no preload, request, or network operation; it only remembers identifiers
+-- supplied by the developer in this client session.
+Library.ImageCache = {}
+function Library:RegisterImage(key, image)
+        if type(key) ~= "string" or key == "" then
+                warn("[RezurXLib] RegisterImage expects a non-empty string key.")
+                return nil
+        end
+        local resolved = type(image) == "number" and ("rbxassetid://" .. image) or tostring(image or "")
+        self.ImageCache[key] = resolved
+        return resolved
+end
+
+function Library:ResolveImage(image)
+        if type(image) == "number" then return "rbxassetid://" .. image end
+        if type(image) == "string" then return self.ImageCache[image] or image end
+        return ""
+end
+
+function Library:ClearImageCache(key)
+        if key == nil then
+                table.clear(self.ImageCache)
+        else
+                self.ImageCache[key] = nil
+        end
+end
+
+function Library:GetThemeNames()
+        local names = {}
+        for name in pairs(Themes) do table.insert(names, name) end
+        table.sort(names)
+        return names
+end
+
+function Library:SetReducedMotion(nextValue)
+        self.Options.ReducedMotion = nextValue == true
+        for _, window in ipairs(self._windows) do
+                window:SetReducedMotion(self.Options.ReducedMotion)
+        end
+        return self.Options.ReducedMotion
 end
 
 function Library:Destroy()
@@ -5088,68 +5906,65 @@ end
 function Library:GetStats()
         local flagCount = 0
         for _ in pairs(self.Flags) do flagCount = flagCount + 1 end
-        -- [FIX] This used to be a hand-maintained list that had already drifted
-        -- (missing HighContrast/Soft the moment they were added above).
-        -- Deriving it from Themes directly means it can't go stale again.
-        local themeNames = {}
-        for name in pairs(Themes) do table.insert(themeNames, name) end
-        table.sort(themeNames)
         return { Version = self.Version, WindowCount = #self._windows, FlagCount = flagCount,
-                Themes = themeNames }
+                Themes = self:GetThemeNames() }
 end
 
--- Machine-readable reference for every tab-level component plus the main
--- Window/Library entry points — enough to build a "Help" tab from, or to
--- print/inspect in the developer console. Params lists each config table's
--- recognized fields; Returns is the object handle's notable methods.
+-- Machine-readable API metadata enables an in-game help tab without a
+-- network request, generated docs page, or a separate dependency.
 function Library:GetDocs()
         return {
                 Version = self.Version,
                 Components = {
-                        { Name = "CreateSection",    Params = "text",                                                                              Returns = "obj (:Set)",                    Description = "Bold uppercase section header." },
-                        { Name = "CreateDivider",     Params = "text",                                                                              Returns = "obj",                           Description = "Horizontal rule with an optional caption." },
-                        { Name = "CreateSpacer",      Params = "px",                                                                                Returns = "nil",                           Description = "Fixed-height blank gap." },
-                        { Name = "CreateLabel",       Params = "Text, Color, Bold, TextSize, Align",                                                Returns = "obj (:Set, :SetColor)",         Description = "Static text line." },
-                        { Name = "CreateParagraph",   Params = "Title, Content",                                                                    Returns = "obj",                           Description = "Title plus wrapped body text." },
-                        { Name = "CreateImage",       Params = "Image, Height, ScaleType, CornerRadius, Tooltip",                                   Returns = "obj",                           Description = "Embedded image/decal." },
-                        { Name = "CreateButton",      Params = "Name, Callback",                                                                    Returns = "obj",                           Description = "Clickable action button." },
-                        { Name = "CreateMultiButton",  Params = "Buttons, Tooltip",                                                                  Returns = "obj",                           Description = "Row of buttons sharing one line." },
-                        { Name = "CreateToggle",      Params = "Name, CurrentValue, Callback, Flag",                                                Returns = "obj (:Set, :Get, :Reset)",      Description = "On/off switch." },
-                        { Name = "CreateSlider",      Params = "Name, Range, CurrentValue, Increment, Suffix, Callback, Flag",                      Returns = "obj (:Set, :Get, :Reset)",      Description = "Numeric drag slider." },
-                        { Name = "CreateInput",       Params = "Name, CurrentValue, PlaceholderText, RemoveTextAfterFocusLost, Callback, Flag",     Returns = "obj (:Set, :Get, :Reset)",      Description = "Single-line text box." },
-                        { Name = "CreateDropdown",    Params = "Name, Options, CurrentOption, MultipleOptions, Searchable, Callback, Flag",         Returns = "obj (:Set, :Get, :Refresh, :Reset)", Description = "Pick one or many from a list; Searchable adds fuzzy filtering." },
-                        { Name = "CreateKeybind",     Params = "Name, CurrentKeybind, HoldToInteract, Callback, Flag",                              Returns = "obj (:Set, :Get, :Reset)",      Description = "Rebindable key capture." },
-                        { Name = "CreateColorPicker", Params = "Name, Color, Presets, Callback, Flag",                                              Returns = "obj (:Set, :Get, :Reset)",      Description = "HSV picker; Presets adds a swatch row." },
-                        { Name = "CreateAccordion",   Params = "Title, DefaultExpanded, Tooltip",                                                   Returns = "obj",                           Description = "Collapsible container for other elements." },
-                        { Name = "CreateBindable",    Params = "Name, Enabled, Keybind, Tooltip, Callback, Flag",                                   Returns = "obj",                           Description = "Feature switch bound to a key." },
-                        { Name = "CreateNotice",      Params = "Title, Content, Type, Height, Tooltip",                                             Returns = "obj",                           Description = "Inline banner/callout (not a toast)." },
-                        { Name = "CreateProgress",    Params = "Title, Value, Min, Max, Suffix, ShowValue, Color, Height, Tooltip, Callback, Flag",  Returns = "obj",                           Description = "Progress/meter bar." },
-                        { Name = "CreateStatus",      Params = "Title, Text, State, Detail, Value, Height, Tooltip, Flag",                          Returns = "obj",                           Description = "Labeled status indicator." },
-                        { Name = "CreateCodeBlock",   Params = "Title, Content, CopyCallback, Height, Tooltip, Flag",                                Returns = "obj",                           Description = "Monospace code/log display with a copy button." },
-                        { Name = "CreateTable",       Params = "Title, Columns, Rows, EmptyText, OnRowActivated, Height, Tooltip, Flag",             Returns = "obj",                           Description = "Simple data table/grid." },
-                        { Name = "CreateTextArea",    Params = "Title, Text, Placeholder, MaxLength, Live, Disabled, Validate, Height, Tooltip, Callback, Flag", Returns = "obj (:Set, :Get, :Reset)", Description = "Multi-line text box." },
+                        { Name = "CreateSection", Params = "text", Returns = ":Set", Description = "Uppercase section label." },
+                        { Name = "CreateDivider", Params = "text", Returns = "object", Description = "Optional-caption rule." },
+                        { Name = "CreateSpacer", Params = "pixels", Returns = "object", Description = "Fixed vertical gap." },
+                        { Name = "CreateLabel", Params = "Text, Color, Bold, TextSize, Align", Returns = ":Set, :SetColor", Description = "Static text line." },
+                        { Name = "CreateParagraph", Params = "Title, Content", Returns = "object", Description = "Wrapped title and description." },
+                        { Name = "CreateImage", Params = "Image, Height, ScaleType, CornerRadius, Tooltip", Returns = "object", Description = "Image or icon content." },
+                        { Name = "CreateButton", Params = "Name, Callback, Tooltip", Returns = "object", Description = "Animated action button." },
+                        { Name = "CreateMultiButton", Params = "Buttons, Tooltip", Returns = "object", Description = "Shared-row actions." },
+                        { Name = "CreateToggle", Params = "Name, CurrentValue, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Animated boolean switch." },
+                        { Name = "CreateSlider", Params = "Name, Range, CurrentValue, Increment, Suffix, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Pointer and touch slider." },
+                        { Name = "CreateInput", Params = "Name, CurrentValue, PlaceholderText, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Single-line input." },
+                        { Name = "CreateDropdown", Params = "Name, Options, CurrentOption, MultipleOptions, Searchable, Callback, Flag", Returns = ":Set, :Get, :Refresh, :Reset", Description = "Single or multi-select with fuzzy search." },
+                        { Name = "CreateKeybind", Params = "Name, CurrentKeybind, HoldToInteract, Callback, ChangedCallback, Flag", Returns = ":Set, :Get, :Reset", Description = "Keyboard binding capture with rebind callback." },
+                        { Name = "CreateColorPicker", Params = "Name, Color, Presets, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Live HSV picker and preset swatches." },
+                        { Name = "CreateAccordion", Params = "Title, DefaultExpanded, Tooltip", Returns = "object", Description = "Collapsible content container." },
+                        { Name = "CreateBindable", Params = "Name, Keybind, Enabled, Callback, Flag", Returns = ":SetEnabled, :SetKeybind", Description = "Enableable shortcut." },
+                        { Name = "CreateNotice", Params = "Title, Content, Type, Height, Tooltip", Returns = ":Set, :SetType", Description = "Durable inline callout." },
+                        { Name = "CreateProgress", Params = "Title, Value, Min, Max, Suffix, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Live progress meter." },
+                        { Name = "CreateSpinner", Params = "Title, Detail, Running, Tooltip, Flag", Returns = ":Start, :Stop, :Set, :Get", Description = "On-demand loading indicator." },
+                        { Name = "CreateCarousel", Params = "Items, CurrentIndex, Callback, Tooltip, Flag", Returns = ":Next, :Previous, :SetItems, :Get", Description = "Compact rotating content." },
+                        { Name = "CreateContextMenu", Params = "Name, ButtonText, Items, Tooltip, Flag", Returns = ":Open, :Close, :SetItems", Description = "On-demand action menu." },
+                        { Name = "CreateStatus", Params = "Title, Text, State, Detail, Value, Flag", Returns = ":Set, :Get", Description = "Status indicator." },
+                        { Name = "CreateCodeBlock", Params = "Title, Content, CopyCallback, Height", Returns = ":Set, :Get", Description = "Monospace copyable content." },
+                        { Name = "CreateTable", Params = "Title, Columns, Rows, OnRowActivated, Height", Returns = ":SetRows, :GetRows", Description = "Compact data grid." },
+                        { Name = "CreateTextArea", Params = "Title, Text, Placeholder, Callback, Flag", Returns = ":Set, :Get, :Reset", Description = "Multi-line input." },
                 },
                 Window = {
-                        { Name = "CreateTab",           Params = "name, icon",                                     Returns = "Tab",  Description = "Adds a tab chip and page." },
-                        { Name = "Notify",               Params = "Title, Content, Duration, Type, Actions",        Returns = "nil",  Description = "Toast notification; Actions adds click-through buttons." },
-                        { Name = "Search",               Params = "query, { AllTabs }",                             Returns = "table", Description = "Searches visible text on the current tab (or all tabs)." },
-                        { Name = "ModifyTheme",          Params = "themeName",                                      Returns = "nil",  Description = "Switches the active theme palette." },
-                        { Name = "SaveConfiguration",    Params = "",                                               Returns = "nil",  Description = "Persists every registered Flag's current value." },
-                        { Name = "LoadConfiguration",    Params = "",                                               Returns = "nil",  Description = "Restores Flag values saved by SaveConfiguration." },
+                        { Name = "CreateTab", Params = "name, icon", Returns = "Tab" },
+                        { Name = "Notify", Params = "Title, Content, Duration, Type, Actions", Returns = "toast" },
+                        { Name = "ShowModal", Params = "Title, Content, ConfirmText, CancelText, ConfirmCallback, CancelCallback", Returns = ":Confirm, :Cancel, :Close", Description = "Confirmation dialog." },
+                        { Name = "ModifyTheme", Params = "name or palette", Returns = "palette" },
+                        { Name = "CreateSettingsPanel", Params = "Name, Icon", Returns = "Tab" },
+                        { Name = "SetToggleKeybind", Params = "Enum.KeyCode or key name", Returns = "Enum.KeyCode" },
+                        { Name = "OpenCommandPalette", Params = "", Returns = "overlay" },
                 },
                 Library = {
-                        { Name = "CreateWindow", Params = "Name, Subtitle, Theme, Size, MinSize, MaxSize, Resizable, LoadingEnabled, LoadingTitle, ToggleUIKeybind, Accessibility, ReducedMotion, MotionScale, ShowUptime, StatusText, ReplaceExisting, Id", Returns = "Window", Description = "Creates the root window." },
-                        { Name = "GetFlag",  Params = "flag",        Returns = "any",    Description = "Reads a registered Flag's current value." },
-                        { Name = "SetFlag",  Params = "flag, value", Returns = "nil",    Description = "Writes a registered Flag's value." },
-                        { Name = "GetStats", Params = "",            Returns = "table",  Description = "Version, window count, flag count, available theme names." },
-                        { Name = "GetDocs",  Params = "",            Returns = "table",  Description = "This reference table." },
+                        { Name = "CreateWindow", Params = "Name, Theme, Size, Host, Parent, Accessibility", Returns = "Window" },
+                        { Name = "RegisterTheme", Params = "name, palette", Returns = "palette" },
+                        { Name = "RegisterImage", Params = "key, imageId", Returns = "string" },
+                        { Name = "SaveConfiguration", Params = "", Returns = "table" },
+                        { Name = "LoadConfiguration", Params = "table", Returns = "nil" },
+                        { Name = "GetDocs", Params = "", Returns = "table" },
+                        { Name = "SetReducedMotion", Params = "boolean", Returns = "boolean" },
                 },
         }
 end
 
--- Optional convenience global — some developers prefer not to thread the
--- return value through every script. Library:CreateWindow(...) via the
--- normal require() return is still the primary, recommended entry point.
-_G.RezurXLib = Library
+if type(_G) == "table" then
+        _G.RezurXLib = Library
+end
 
 return Library
