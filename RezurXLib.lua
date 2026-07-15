@@ -608,6 +608,41 @@ function Library:CreateWindow(cfg)
         local loadingOn    = cfg.LoadingEnabled ~= false
         local toggleKey    = cfg.ToggleUIKeybind or Enum.KeyCode.K
 
+        -- Compact shell labels intentionally accept emoji, symbols, and text.
+        -- Four Unicode codepoints keeps them readable in the 28px badge while
+        -- avoiding an accidental full title inside an icon-sized control.
+        local function limitBadgeText(value, fallback)
+                local text = tostring(value == nil and fallback or value)
+                if text == "" then text = tostring(fallback or "R") end
+                local ok, count = pcall(function() return utf8.len(text) end)
+                if not ok or type(count) ~= "number" then count = #text end
+                if count > 4 then
+                        local cut = nil
+                        pcall(function() cut = utf8.offset(text, 5) end)
+                        text = cut and string.sub(text, 1, cut - 1) or string.sub(text, 1, 4)
+                end
+                return text
+        end
+        local function badgeCharacterCount(text)
+                local ok, count = pcall(function() return utf8.len(text) end)
+                return ok and type(count) == "number" and count or #text
+        end
+        -- Four characters are readable only when their typography tightens
+        -- progressively. Keeping this in one helper makes the header badge
+        -- and its floating restore counterpart visually consistent.
+        local function badgeTextSize(text, floating)
+                local count = badgeCharacterCount(text)
+                if count <= 1 then return floating and 18 or 16 end
+                if count == 2 then return floating and 16 or 14 end
+                if count == 3 then return floating and 14 or 12 end
+                return floating and 12 or 10
+        end
+        local brandText = limitBadgeText(cfg.BrandText or cfg.BrandIcon, "R")
+        local restoreText = limitBadgeText(
+                cfg.RestoreText or cfg.RestoreIcon or cfg.ClosedButtonText,
+                brandText
+        )
+
         -- Each window receives a private palette. Older versions mutated the
         -- module palette directly, so changing one window's theme could leave
         -- another window partially recolored. This isolates theme updates.
@@ -873,6 +908,11 @@ function Library:CreateWindow(cfg)
         corner(frame, R.outer)
         local frameStroke = stroke(frame, C.borderAcc, 1.5)
         frameStroke.Transparency = 0.55
+        -- Round joins prevent sharp pixels where the outer radius meets the
+        -- footer on renderers that expose the optional LineJoinMode property.
+        pcall(function()
+                frameStroke.LineJoinMode = Enum.LineJoinMode.Round
+        end)
         onTheme(function()
                 Tween(frame, T20, { BackgroundColor3 = C.bg })
                 Tween(frameStroke, T20, { Color = C.borderAcc })
@@ -1003,19 +1043,19 @@ function Library:CreateWindow(cfg)
         brandLetter.Font = Enum.Font.GothamBlack
         brandLetter.TextSize = 14
         brandLetter.TextColor3 = C.accentHi
-        -- [FIX] string.sub(byte 1) breaks on multi-byte UTF-8 (emoji like 👑).
-        -- Use utf8 library to get the first actual character. If the first
-        -- character is non-ASCII (emoji), fall back to "R" since emoji don't
-        -- render well in GothamBlack at 14px.
-        local firstChar = (utf8 and utf8.sub and utf8.sub(windowName, 1, 1)) or string.sub(windowName, 1, 1)
-        local firstByte = string.byte(firstChar or "") or 0
-        if firstByte > 127 then
-                brandLetter.Text = "R"  -- emoji or non-ASCII, use fallback
-        else
-                brandLetter.Text = string.upper(firstChar) or "R"
-        end
+        -- The badge deliberately renders the developer-provided UTF-8 text.
+        -- Its length is capped and its size is adjusted by applyBrandText.
+        brandLetter.TextXAlignment = Enum.TextXAlignment.Center
+        brandLetter.TextYAlignment = Enum.TextYAlignment.Center
         brandLetter.ZIndex = 6
         brandLetter.Parent = brandMark
+        local function applyBrandText(nextText)
+                brandText = limitBadgeText(nextText, "R")
+                brandLetter.Text = brandText
+                brandLetter.TextSize = badgeTextSize(brandText, false)
+                return brandText
+        end
+        applyBrandText(brandText)
         onTheme(function()
                 Tween(header, T20, { BackgroundColor3 = C.headerA })
                 Tween(hFix, T20, { BackgroundColor3 = Color3.new(
@@ -1054,9 +1094,14 @@ function Library:CreateWindow(cfg)
                 end
         end) end
 
+        -- Reserve a real lane for the controls instead of merely drawing text
+        -- beneath them. The stats chip needs more space when it is enabled.
+        local showStats = cfg.ShowStats == true
+        local headerTextInset = showStats and 270 or 162
+
         local logo = Instance.new("TextLabel")
         logo.Text = windowName
-        logo.Size = UDim2.new(1, -150, 0, 22)
+        logo.Size = UDim2.new(1, -headerTextInset, 0, 22)
         logo.Position = UDim2.new(0, 52, 0, 7)
         logo.BackgroundTransparency = 1
         logo.Font = Enum.Font.GothamBold
@@ -1073,7 +1118,7 @@ function Library:CreateWindow(cfg)
 
         local subLbl = Instance.new("TextLabel")
         subLbl.Text = subtitle
-        subLbl.Size = UDim2.new(1, -150, 0, 13)
+        subLbl.Size = UDim2.new(1, -headerTextInset, 0, 13)
         subLbl.Position = UDim2.new(0, 53, 0, 31)
         subLbl.BackgroundTransparency = 1
         subLbl.Font = Enum.Font.GothamMedium
@@ -1097,7 +1142,6 @@ function Library:CreateWindow(cfg)
         statFrame.BackgroundColor3 = C.panelAlt
         statFrame.BorderSizePixel = 0
         statFrame.ZIndex = 5
-        local showStats = cfg.ShowStats == true
         statFrame.Visible = showStats
         statFrame.Parent = header
         corner(statFrame, R.small)
@@ -1169,7 +1213,7 @@ function Library:CreateWindow(cfg)
         local minBtn = Instance.new("TextButton")
         minBtn.Text = ""
         minBtn.Size = UDim2.new(0, 38, 0, 32)
-        minBtn.Position = UDim2.new(1, -86, 0.5, -14)
+        minBtn.Position = UDim2.new(1, -98, 0.5, -14)
         minBtn.BackgroundColor3 = C.panelAlt
         minBtn.BorderSizePixel = 0
         minBtn.AutoButtonColor = false
@@ -1212,7 +1256,7 @@ function Library:CreateWindow(cfg)
         local closeBtn = Instance.new("TextButton")
         closeBtn.Text = ""
         closeBtn.Size = UDim2.new(0, 38, 0, 32)
-        closeBtn.Position = UDim2.new(1, -44, 0.5, -14)
+        closeBtn.Position = UDim2.new(1, -56, 0.5, -14)
         closeBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
         closeBtn.BorderSizePixel = 0
         closeBtn.AutoButtonColor = false
@@ -1278,10 +1322,11 @@ function Library:CreateWindow(cfg)
         -- [FIX] Center the ball on screen instead of top-left corner
         floatIcon.Position = UDim2.new(0.5, -26, 0.5, -26)
         floatIcon.BackgroundColor3 = C.accent
-        -- Use the library monogram rather than a platform-dependent emoji.
-        floatIcon.Text = "R"
+        -- The restore control is intentionally configurable; Roblox will use
+        -- its normal font fallback for emoji and symbols when available.
+        floatIcon.Text = restoreText
         floatIcon.Font = Enum.Font.GothamBold
-        floatIcon.TextSize = 18
+        floatIcon.TextSize = badgeTextSize(restoreText, true)
         floatIcon.TextColor3 = C.white
         floatIcon.AutoButtonColor = false
         floatIcon.BorderSizePixel = 0
@@ -1292,11 +1337,18 @@ function Library:CreateWindow(cfg)
         floatIcon.Parent = overlayGui
         corner(floatIcon, UDim.new(1, 0))
         stroke(floatIcon, C.white, 2)
+        local function applyRestoreText(nextText)
+                restoreText = limitBadgeText(nextText, brandText)
+                floatIcon.Text = restoreText
+                floatIcon.TextSize = badgeTextSize(restoreText, true)
+                return restoreText
+        end
+        applyRestoreText(restoreText)
         -- [FIX] Track movement so tap (restore) vs drag (move) is distinguished
         local floatDragMoved = false
         floatIcon.InputBegan:Connect(function(inp)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-                        local startDrag = inp.Position
+                        local startPointer = Vector2.new(inp.Position.X, inp.Position.Y)
                         floatDragMoved = false
                         local vp = getViewport()
                         -- Pointer events and AbsolutePosition are both in physical
@@ -1304,14 +1356,20 @@ function Library:CreateWindow(cfg)
                         -- the initial 0.5 scale position and caused the first move to
                         -- snap to the top-left corner.
                         local startAbs = floatIcon.AbsolutePosition
-                        local iconSize = math.max(floatIcon.AbsoluteSize.X, 1)
+                        local pointerOffset = startPointer - startAbs
+                        local iconWidth = math.max(floatIcon.AbsoluteSize.X, 1)
+                        local iconHeight = math.max(floatIcon.AbsoluteSize.Y, 1)
                         local overlayScale = overlayGui == screenGui
                                 and math.max(uiScale.Scale, 0.01) or 1
                         registerDrag("floatIcon", inp, function(pos)
-                                local d = pos - startDrag
+                                local pointer = Vector2.new(pos.X, pos.Y)
+                                local d = pointer - startPointer
                                 if d.Magnitude > 6 then floatDragMoved = true end
-                                local targetX = math.clamp(startAbs.X + d.X, 0, math.max(0, vp.X - iconSize))
-                                local targetY = math.clamp(startAbs.Y + d.Y, 0, math.max(0, vp.Y - iconSize))
+                                -- Preserve the point the user grabbed. This keeps an
+                                -- edge grab under the cursor/finger instead of snapping
+                                -- the button's top-left toward the pointer on first move.
+                                local targetX = math.clamp(pointer.X - pointerOffset.X, 0, math.max(0, vp.X - iconWidth))
+                                local targetY = math.clamp(pointer.Y - pointerOffset.Y, 0, math.max(0, vp.Y - iconHeight))
                                 floatIcon.Position = UDim2.fromOffset(
                                         targetX / overlayScale,
                                         targetY / overlayScale
@@ -1360,14 +1418,14 @@ function Library:CreateWindow(cfg)
         -- ------------------------------------------------------------
         local dragBar = Instance.new("TextButton")
         dragBar.Name = "DragBar"
-        dragBar.Size = UDim2.new(1, -96, 1, 0)
+        dragBar.Size = UDim2.new(1, -108, 1, 0)
         dragBar.Position = UDim2.new(0, 0, 0, 0)
         dragBar.BackgroundTransparency = 1
         dragBar.Text = ""
         dragBar.AutoButtonColor = false
         dragBar.BorderSizePixel = 0
         -- [FIX] ZIndex 6 = above logoGlow(4), statFrame(5), logo(5), subLbl(5)
-        -- but dragBar ends 80px before right edge, so minBtn/closeBtn stay tappable
+        -- and leaves a 108px control lane, so minBtn/closeBtn stay tappable.
         dragBar.ZIndex = 6
         dragBar.Active = true
         dragBar.Selectable = false
@@ -1498,19 +1556,28 @@ function Library:CreateWindow(cfg)
         content.BackgroundTransparency = 1
         content.Parent = body
 
+        -- The footer is clipped by a taller rounded mask. Its top rounding is
+        -- above the visible bar, while its lower rounding precisely follows
+        -- the shell's corner radius. This prevents square footer pixels from
+        -- bleeding past the bottom outline without rounding the top edge.
+        local footerMask = Instance.new("Frame")
+        footerMask.Name = "FooterMask"
+        footerMask.Size = UDim2.new(1, 0, 0, STATUSBAR_H + R.outer)
+        footerMask.Position = UDim2.new(0, 0, 1, -(STATUSBAR_H + R.outer))
+        footerMask.BackgroundTransparency = 1
+        footerMask.BorderSizePixel = 0
+        footerMask.ClipsDescendants = true
+        footerMask.ZIndex = 3
+        footerMask.Parent = frame
+        corner(footerMask, R.outer)
+
         local statusBar = Instance.new("Frame")
         statusBar.Size = UDim2.new(1, 0, 0, STATUSBAR_H)
         statusBar.Position = UDim2.new(0, 0, 1, -STATUSBAR_H)
         statusBar.BackgroundColor3 = C.panel
         statusBar.BorderSizePixel = 0
         statusBar.ClipsDescendants = true
-        statusBar.Parent = body
-        -- [FIX] Don't round the status bar — frame already has ClipsDescendants=true
-        -- and R.outer corners. Rounding the status bar separately creates a mismatch
-        -- where the statusBar's 20px radius doesn't align with frame's 20px radius,
-        -- causing a visible bleed at the bottom corners. The sbFix already squares
-        -- off the top; removing the bottom rounding lets frame's clip handle it.
-        -- corner(statusBar, R.outer)  -- removed
+        statusBar.Parent = footerMask
         local sbFix = Instance.new("Frame")
         sbFix.Size = UDim2.new(1, 0, 0.5, 0)
         sbFix.BackgroundColor3 = C.panel
@@ -1531,7 +1598,7 @@ function Library:CreateWindow(cfg)
 
         local sDot = Instance.new("Frame")
         sDot.Size = UDim2.new(0, 7, 0, 7)
-        sDot.Position = UDim2.new(0, 12, 0.5, -3)
+        sDot.Position = UDim2.new(0, 16, 0.5, -3)
         sDot.BackgroundColor3 = C.green
         sDot.BorderSizePixel = 0
         sDot.ZIndex = 6
@@ -1554,7 +1621,7 @@ function Library:CreateWindow(cfg)
         local sTxt = Instance.new("TextLabel")
         sTxt.AutomaticSize = Enum.AutomaticSize.X
         sTxt.Size = UDim2.new(0, 0, 0, 14)
-        sTxt.Position = UDim2.new(0, 26, 0.5, -7)
+        sTxt.Position = UDim2.new(0, 30, 0.5, -7)
         sTxt.BackgroundTransparency = 1
         sTxt.Font = Enum.Font.Code
         sTxt.TextSize = 10
@@ -1578,7 +1645,7 @@ function Library:CreateWindow(cfg)
         sVer.AutomaticSize = Enum.AutomaticSize.X
         sVer.Size = UDim2.new(0, 0, 0, 14)
         sVer.AnchorPoint = Vector2.new(1, 0.5)
-        sVer.Position = UDim2.new(1, -18, 0.5, -7)
+        sVer.Position = UDim2.new(1, -56, 0.5, -7)
         sVer.BackgroundTransparency = 1
         sVer.Font = Enum.Font.Code
         sVer.TextSize = 10
@@ -1602,8 +1669,8 @@ function Library:CreateWindow(cfg)
         -- compact, fully inset three-dot grip.
         local resizeHandle = Instance.new("TextButton")
         resizeHandle.Name = "ResizeHandle"
-        resizeHandle.Size = UDim2.fromOffset(22, 22)
-        resizeHandle.Position = UDim2.new(1, -26, 1, -26)
+        resizeHandle.Size = UDim2.fromOffset(24, 24)
+        resizeHandle.Position = UDim2.new(1, -32, 1, -32)
         resizeHandle.BackgroundTransparency = 1
         resizeHandle.Text = ""
         resizeHandle.AutoButtonColor = false
@@ -1617,7 +1684,7 @@ function Library:CreateWindow(cfg)
                 local dot = Instance.new("Frame")
                 dot.Name = "GripDot" .. index
                 dot.Size = UDim2.fromOffset(3, 3)
-                dot.Position = UDim2.fromOffset(5 + (index - 1) * 4, 13 - (index - 1) * 4)
+                dot.Position = UDim2.fromOffset(7 + (index - 1) * 4, 15 - (index - 1) * 4)
                 dot.BackgroundColor3 = C.muted
                 dot.BorderSizePixel = 0
                 dot.ZIndex = 9
@@ -5541,6 +5608,37 @@ function Library:CreateWindow(cfg)
                 return Window.Name
         end
 
+        -- Set the compact header badge. Values are capped at four UTF-8
+        -- characters so the badge stays intentional rather than becoming a
+        -- clipped second title.
+        function Window:SetBrandText(nextText)
+                return applyBrandText(nextText)
+        end
+
+        function Window:GetBrandText()
+                return brandText
+        end
+
+        -- Set the text on the floating restore control shown after Close.
+        -- Empty values inherit the current brand badge; text is capped at four
+        -- UTF-8 characters and supports regular text, symbols, and emoji.
+        function Window:SetRestoreText(nextText)
+                return applyRestoreText(nextText)
+        end
+
+        function Window:GetRestoreText()
+                return restoreText
+        end
+
+        -- Compatibility aliases for developers who think of these as icons
+        -- or as the compact button displayed after the window is closed.
+        Window.SetBrandIcon = Window.SetBrandText
+        Window.GetBrandIcon = Window.GetBrandText
+        Window.SetRestoreIcon = Window.SetRestoreText
+        Window.GetRestoreIcon = Window.GetRestoreText
+        Window.SetClosedButtonText = Window.SetRestoreText
+        Window.GetClosedButtonText = Window.GetRestoreText
+
         function Window:SetSubtitle(nextSubtitle)
                 subLbl.Text = tostring(nextSubtitle or "")
                 return subLbl.Text
@@ -6376,6 +6474,10 @@ function Library:GetDocs()
                 },
                 Window = {
                         { Name = "CreateTab", Params = "name, optional icon", Returns = "Tab (:SetTitle, :SetIcon)", Description = "Text-labelled tab with a measured, horizontally scrolling rail." },
+                        { Name = "SetBrandText", Params = "text (up to four UTF-8 characters)", Returns = "applied text", Description = "Sets the compact header badge; emoji and symbols are preserved." },
+                        { Name = "GetBrandText", Params = "", Returns = "text", Description = "Gets the current compact header badge text." },
+                        { Name = "SetRestoreText", Params = "text (up to four UTF-8 characters)", Returns = "applied text", Description = "Sets the floating restore button shown after Close." },
+                        { Name = "GetRestoreText", Params = "", Returns = "text", Description = "Gets the current floating restore button text." },
                         { Name = "Notify", Params = "Title, Content, Duration, Type, Actions", Returns = "toast" },
                         { Name = "ShowModal", Params = "Title, Content, ConfirmText, CancelText, ConfirmCallback, CancelCallback", Returns = ":Confirm, :Cancel, :Close", Description = "Confirmation dialog." },
                         { Name = "ModifyTheme", Params = "name or palette", Returns = "palette" },
