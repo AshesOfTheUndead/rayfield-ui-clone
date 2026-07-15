@@ -1096,7 +1096,10 @@ function Library:CreateWindow(cfg)
 
         -- Reserve a real lane for the controls instead of merely drawing text
         -- beneath them. The stats chip needs more space when it is enabled.
-        local showStats = cfg.ShowStats == true
+        -- The compact diagnostics chip is useful in a universal library and
+        -- is visible by default. Projects can still opt out explicitly with
+        -- ShowStats = false.
+        local showStats = cfg.ShowStats ~= false
         local headerTextInset = showStats and 270 or 162
 
         local logo = Instance.new("TextLabel")
@@ -1138,7 +1141,7 @@ function Library:CreateWindow(cfg)
         -- FPS / PING chip
         local statFrame = Instance.new("Frame")
         statFrame.Size = UDim2.new(0, 118, 0, 26)
-        statFrame.Position = UDim2.new(1, -206, 0.5, -13)
+        statFrame.Position = UDim2.new(1, -224, 0.5, -13)
         statFrame.BackgroundColor3 = C.panelAlt
         statFrame.BorderSizePixel = 0
         statFrame.ZIndex = 5
@@ -1356,6 +1359,7 @@ function Library:CreateWindow(cfg)
                         -- the initial 0.5 scale position and caused the first move to
                         -- snap to the top-left corner.
                         local startAbs = floatIcon.AbsolutePosition
+                        local startPosition = floatIcon.Position
                         local pointerOffset = startPointer - startAbs
                         local iconWidth = math.max(floatIcon.AbsoluteSize.X, 1)
                         local iconHeight = math.max(floatIcon.AbsoluteSize.Y, 1)
@@ -1370,9 +1374,13 @@ function Library:CreateWindow(cfg)
                                 -- the button's top-left toward the pointer on first move.
                                 local targetX = math.clamp(pointer.X - pointerOffset.X, 0, math.max(0, vp.X - iconWidth))
                                 local targetY = math.clamp(pointer.Y - pointerOffset.Y, 0, math.max(0, vp.Y - iconHeight))
-                                floatIcon.Position = UDim2.fromOffset(
-                                        targetX / overlayScale,
-                                        targetY / overlayScale
+                                -- Keep the original scale terms intact and apply only
+                                -- the physical drag delta. Replacing a centered
+                                -- UDim2 with pure offsets is what caused the first
+                                -- restore-button movement to jump upward.
+                                floatIcon.Position = UDim2.new(
+                                        startPosition.X.Scale, startPosition.X.Offset + (targetX - startAbs.X) / overlayScale,
+                                        startPosition.Y.Scale, startPosition.Y.Offset + (targetY - startAbs.Y) / overlayScale
                                 )
                         end)
                 end
@@ -1556,31 +1564,44 @@ function Library:CreateWindow(cfg)
         content.BackgroundTransparency = 1
         content.Parent = body
 
-        -- The footer is clipped by a taller rounded mask. Its top rounding is
-        -- above the visible bar, while its lower rounding precisely follows
-        -- the shell's corner radius. This prevents square footer pixels from
-        -- bleeding past the bottom outline without rounding the top edge.
+        -- The footer owns a taller rounded surface. Its top rounding is above
+        -- the visible bar, while its lower rounding precisely follows the
+        -- shell's corner radius and prevents square footer pixels from bleeding.
         local footerMask = Instance.new("Frame")
         footerMask.Name = "FooterMask"
         footerMask.Size = UDim2.new(1, 0, 0, STATUSBAR_H + R.outer)
         footerMask.Position = UDim2.new(0, 0, 1, -(STATUSBAR_H + R.outer))
-        footerMask.BackgroundTransparency = 1
+        footerMask.BackgroundColor3 = C.panel
+        footerMask.BackgroundTransparency = 0
         footerMask.BorderSizePixel = 0
         footerMask.ClipsDescendants = true
         footerMask.ZIndex = 3
         footerMask.Parent = frame
         corner(footerMask, R.outer)
 
+        -- UICorner rounds the surface that owns it, not a child's fill. Use
+        -- the rounded footer surface as the actual background, then cover its
+        -- upper setup area with the window color. The remaining 24px footer
+        -- has genuinely smooth lower corners on every renderer.
+        local footerCover = Instance.new("Frame")
+        footerCover.Name = "FooterTopCover"
+        footerCover.Size = UDim2.new(1, 0, 0, R.outer)
+        footerCover.Position = UDim2.new(0, 0, 0, 0)
+        footerCover.BackgroundColor3 = C.bg
+        footerCover.BorderSizePixel = 0
+        footerCover.ZIndex = 4
+        footerCover.Parent = footerMask
+
         local statusBar = Instance.new("Frame")
         statusBar.Size = UDim2.new(1, 0, 0, STATUSBAR_H)
         statusBar.Position = UDim2.new(0, 0, 1, -STATUSBAR_H)
-        statusBar.BackgroundColor3 = C.panel
+        statusBar.BackgroundTransparency = 1
         statusBar.BorderSizePixel = 0
         statusBar.ClipsDescendants = true
         statusBar.Parent = footerMask
         local sbFix = Instance.new("Frame")
         sbFix.Size = UDim2.new(1, 0, 0.5, 0)
-        sbFix.BackgroundColor3 = C.panel
+        sbFix.BackgroundTransparency = 1
         sbFix.BorderSizePixel = 0
         sbFix.ZIndex = 4
         sbFix.Parent = statusBar
@@ -1591,6 +1612,8 @@ function Library:CreateWindow(cfg)
         sbTopLine.ZIndex = 5
         sbTopLine.Parent = statusBar
         onTheme(function()
+                Tween(footerMask, T20, { BackgroundColor3 = C.panel })
+                Tween(footerCover, T20, { BackgroundColor3 = C.bg })
                 Tween(statusBar, T20, { BackgroundColor3 = C.panel })
                 Tween(sbFix, T20, { BackgroundColor3 = C.panel })
                 Tween(sbTopLine, T20, { BackgroundColor3 = C.border })
@@ -1670,7 +1693,7 @@ function Library:CreateWindow(cfg)
         local resizeHandle = Instance.new("TextButton")
         resizeHandle.Name = "ResizeHandle"
         resizeHandle.Size = UDim2.fromOffset(24, 24)
-        resizeHandle.Position = UDim2.new(1, -32, 1, -32)
+        resizeHandle.Position = UDim2.new(1, -35, 1, -30)
         resizeHandle.BackgroundTransparency = 1
         resizeHandle.Text = ""
         resizeHandle.AutoButtonColor = false
