@@ -833,14 +833,16 @@ function Library:CreateWindow(cfg)
         -- ------------------------------------------------------------
         local shadow = Instance.new("Frame")
         shadow.Name = "Shadow"
-        shadow.Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36)
-        shadow.Position = UDim2.new(0.5, -(WIN_W + 36) / 2, 0.5, -(WIN_H + 36) / 2)
+        -- Keep depth subtle. A large opaque backing reads as a second black
+        -- panel and looks like the window is bleeding past its own outline.
+        shadow.Size = UDim2.new(0, WIN_W + 16, 0, WIN_H + 16)
+        shadow.Position = UDim2.new(0.5, -(WIN_W + 16) / 2, 0.5, -(WIN_H + 16) / 2)
         shadow.BackgroundColor3 = Color3.new(0, 0, 0)
-        shadow.BackgroundTransparency = 0.52
+        shadow.BackgroundTransparency = 0.82
         shadow.BorderSizePixel = 0
         shadow.ZIndex = 1
         shadow.Parent = screenGui
-        corner(shadow, R.outer + 8)
+        corner(shadow, R.outer + 6)
 
         -- Faint accent-tinted ambient glow, wider than the shadow and mostly
         -- transparent — gives the window a bit of branded "premium" presence
@@ -931,6 +933,9 @@ function Library:CreateWindow(cfg)
         header.Size = UDim2.new(1, 0, 0, HEADER_H)
         header.BackgroundColor3 = C.headerA
         header.BorderSizePixel = 0
+        -- The brand glow and close-button halo must respect the rounded
+        -- header shell; without clipping, they leak into the top corners.
+        header.ClipsDescendants = true
         header.ZIndex = 4
         header.Parent = frame
         corner(header, R.outer)
@@ -963,11 +968,11 @@ function Library:CreateWindow(cfg)
         accentLine.Parent = header
 
         local logoGlow = Instance.new("Frame")
-        logoGlow.Size = UDim2.new(0, 56, 0, 56)
+        logoGlow.Size = UDim2.new(0, 44, 0, 44)
         logoGlow.AnchorPoint = Vector2.new(0.5, 0.5)
         logoGlow.Position = UDim2.new(0, 30, 0.5, 0)
         logoGlow.BackgroundColor3 = C.accent
-        logoGlow.BackgroundTransparency = 0.94
+        logoGlow.BackgroundTransparency = 0.97
         logoGlow.BorderSizePixel = 0
         logoGlow.ZIndex = 4
         logoGlow.Parent = header
@@ -1040,11 +1045,11 @@ function Library:CreateWindow(cfg)
                 while header.Parent do
                         if reducedMotion then break end
                         Tween(logoGlow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                                { BackgroundTransparency = 0.82 })
+                                { BackgroundTransparency = 0.90 })
                         task.wait(1.6)
                         if not header.Parent then break end
                         Tween(logoGlow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                                { BackgroundTransparency = 0.94 })
+                                { BackgroundTransparency = 0.97 })
                         task.wait(1.6)
                 end
         end) end
@@ -1054,9 +1059,11 @@ function Library:CreateWindow(cfg)
         logo.Size = UDim2.new(1, -150, 0, 22)
         logo.Position = UDim2.new(0, 52, 0, 7)
         logo.BackgroundTransparency = 1
-        logo.Font = Enum.Font.GothamBlack
+        logo.Font = Enum.Font.GothamBold
         logo.TextSize = 18
         logo.TextColor3 = C.text
+        logo.TextStrokeColor3 = C.black
+        logo.TextStrokeTransparency = 0.84
         logo.TextStrokeTransparency = 0.5
         logo.TextStrokeColor3 = Color3.new(0, 0, 0)
         logo.TextXAlignment = Enum.TextXAlignment.Left
@@ -1072,6 +1079,8 @@ function Library:CreateWindow(cfg)
         subLbl.Font = Enum.Font.GothamMedium
         subLbl.TextSize = 10
         subLbl.TextColor3 = C.muted
+        subLbl.TextStrokeColor3 = C.black
+        subLbl.TextStrokeTransparency = 0.94
         subLbl.TextXAlignment = Enum.TextXAlignment.Left
         subLbl.TextTruncate = Enum.TextTruncate.AtEnd
         subLbl.ZIndex = 5
@@ -1269,15 +1278,15 @@ function Library:CreateWindow(cfg)
         -- [FIX] Center the ball on screen instead of top-left corner
         floatIcon.Position = UDim2.new(0.5, -26, 0.5, -26)
         floatIcon.BackgroundColor3 = C.accent
-        -- [FIX] Use crown emoji for the floating restore ball
-        floatIcon.Text = "👑"
-        floatIcon.Font = Enum.Font.GothamMedium
-        floatIcon.TextSize = 24
+        -- Use the library monogram rather than a platform-dependent emoji.
+        floatIcon.Text = "R"
+        floatIcon.Font = Enum.Font.GothamBold
+        floatIcon.TextSize = 18
         floatIcon.TextColor3 = C.white
         floatIcon.AutoButtonColor = false
         floatIcon.BorderSizePixel = 0
-        -- [FIX] ZIndex very high so ball is above all UI
-        floatIcon.ZIndex = 10000
+        -- The restore control sits above the window but below modal layers.
+        floatIcon.ZIndex = 65
         floatIcon.Selectable = true
         floatIcon.Visible = false
         floatIcon.Parent = overlayGui
@@ -1288,23 +1297,25 @@ function Library:CreateWindow(cfg)
         floatIcon.InputBegan:Connect(function(inp)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
                         local startDrag = inp.Position
-                        -- [FIX] Track the starting Position offset (not AbsolutePosition)
-                        -- AbsolutePosition may not update in-time within the same frame,
-                        -- causing the Y to get stuck. Using Position offset directly avoids
-                        -- the IgnoreGuiInset offset issue and the layout lag.
-                        local startPos = floatIcon.Position
                         floatDragMoved = false
                         local vp = getViewport()
-                        local iconSize = floatIcon.AbsoluteSize.X
+                        -- Pointer events and AbsolutePosition are both in physical
+                        -- screen pixels. Mixing them with Position.Offset discards
+                        -- the initial 0.5 scale position and caused the first move to
+                        -- snap to the top-left corner.
+                        local startAbs = floatIcon.AbsolutePosition
+                        local iconSize = math.max(floatIcon.AbsoluteSize.X, 1)
+                        local overlayScale = overlayGui == screenGui
+                                and math.max(uiScale.Scale, 0.01) or 1
                         registerDrag("floatIcon", inp, function(pos)
                                 local d = pos - startDrag
                                 if d.Magnitude > 6 then floatDragMoved = true end
-                                -- Compute target in screen pixels from startPos offset
-                                local startScreenX = startPos.X.Offset
-                                local startScreenY = startPos.Y.Offset
-                                local targetX = math.clamp(startScreenX + d.X, 0, math.max(0, vp.X - iconSize))
-                                local targetY = math.clamp(startScreenY + d.Y, 0, math.max(0, vp.Y - iconSize))
-                                floatIcon.Position = UDim2.new(0, targetX, 0, targetY)
+                                local targetX = math.clamp(startAbs.X + d.X, 0, math.max(0, vp.X - iconSize))
+                                local targetY = math.clamp(startAbs.Y + d.Y, 0, math.max(0, vp.Y - iconSize))
+                                floatIcon.Position = UDim2.fromOffset(
+                                        targetX / overlayScale,
+                                        targetY / overlayScale
+                                )
                         end)
                 end
         end)
@@ -1378,14 +1389,14 @@ function Library:CreateWindow(cfg)
                                         moved = true
                                         -- Position itself follows the pointer directly;
                                         -- only depth cues animate, so drag remains crisp.
-                                        Tween(shadow, T15, { BackgroundTransparency = 0.40 })
+                                        Tween(shadow, T15, { BackgroundTransparency = 0.65 })
                                         Tween(ambientGlow, T15, { BackgroundTransparency = 0.87 })
                                         Tween(frameStroke, T15, { Transparency = 0.15 })
                                 end
                                 local targetX, targetY = clampWindowPosition(startAbs.X + d.X, startAbs.Y + d.Y)
                                 moveWindowTo(targetX, targetY)
                         end, function()
-                                Tween(shadow, T15, { BackgroundTransparency = 0.52 })
+                                Tween(shadow, T15, { BackgroundTransparency = 0.82 })
                                 Tween(ambientGlow, T15, { BackgroundTransparency = 0.93 })
                                 Tween(frameStroke, T15, { Transparency = 0.55 })
                         end)
@@ -1586,35 +1597,39 @@ function Library:CreateWindow(cfg)
         -- The footer is informational only. Letting it drag the window made
         -- scrolls and taps near status text feel unpredictable on touch.
 
-        -- [FIX] Resize handle (bottom-right corner) — drag to resize window
+        -- A full-size resize button looked like a detached square at the
+        -- rounded corner. Keep the hit target generous but render only a
+        -- compact, fully inset three-dot grip.
         local resizeHandle = Instance.new("TextButton")
         resizeHandle.Name = "ResizeHandle"
-        -- [FIX] Smaller (18px) and inset 2px from corner (-20) so it sits
-        -- inside frame's 20px rounded corner instead of overhanging the edge.
-        -- Corner radius increased to match frame's curve better.
-        resizeHandle.Size = UDim2.new(0, 18, 0, 18)
-        resizeHandle.Position = UDim2.new(1, -20, 1, -20)
-        resizeHandle.BackgroundColor3 = C.panelAlt
-        resizeHandle.BackgroundTransparency = 0.3
-        resizeHandle.Text = "⇲"
-        resizeHandle.TextColor3 = C.muted
-        resizeHandle.Font = Enum.Font.GothamMedium
-        resizeHandle.TextSize = 10
+        resizeHandle.Size = UDim2.fromOffset(22, 22)
+        resizeHandle.Position = UDim2.new(1, -26, 1, -26)
+        resizeHandle.BackgroundTransparency = 1
+        resizeHandle.Text = ""
         resizeHandle.AutoButtonColor = false
         resizeHandle.BorderSizePixel = 0
         resizeHandle.ZIndex = 8
         resizeHandle.Selectable = true
         resizeHandle.Visible = resizable
         resizeHandle.Parent = frame
-        corner(resizeHandle, R.small)
-        local resizeStroke = stroke(resizeHandle, C.border, 1)
+        local gripDots = {}
+        for index = 1, 3 do
+                local dot = Instance.new("Frame")
+                dot.Name = "GripDot" .. index
+                dot.Size = UDim2.fromOffset(3, 3)
+                dot.Position = UDim2.fromOffset(5 + (index - 1) * 4, 13 - (index - 1) * 4)
+                dot.BackgroundColor3 = C.muted
+                dot.BorderSizePixel = 0
+                dot.ZIndex = 9
+                dot.Parent = resizeHandle
+                corner(dot, UDim.new(1, 0))
+                table.insert(gripDots, dot)
+        end
         resizeHandle.MouseEnter:Connect(function()
-                Tween(resizeHandle, T10, { BackgroundColor3 = C.panelHov, BackgroundTransparency = 0.1 })
-                Tween(resizeHandle, T10, { TextColor3 = C.accent })
+                for _, dot in ipairs(gripDots) do Tween(dot, T10, { BackgroundColor3 = C.accent }) end
         end)
         resizeHandle.MouseLeave:Connect(function()
-                Tween(resizeHandle, T10, { BackgroundColor3 = C.panelAlt, BackgroundTransparency = 0.3 })
-                Tween(resizeHandle, T10, { TextColor3 = C.muted })
+                for _, dot in ipairs(gripDots) do Tween(dot, T10, { BackgroundColor3 = C.muted }) end
         end)
         WindowJanitor:Add(resizeHandle.InputBegan:Connect(function(inp)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1
@@ -1625,7 +1640,7 @@ function Library:CreateWindow(cfg)
                 local startFramePosition = frame.Position
                 local startShadowPosition = shadow.Position
                 local scale = math.max(uiScale.Scale, 0.01)
-                Tween(shadow, T15, { BackgroundTransparency = 0.40 })
+                Tween(shadow, T15, { BackgroundTransparency = 0.65 })
                 Tween(ambientGlow, T15, { BackgroundTransparency = 0.87 })
                 Tween(frameStroke, T15, { Transparency = 0.15 })
                 registerDrag("resize", inp, function(pos)
@@ -1637,7 +1652,7 @@ function Library:CreateWindow(cfg)
                         frame.Position = startFramePosition
                         frame.Size = UDim2.new(0, newW, 0, newH)
                         shadow.Position = startShadowPosition
-                        shadow.Size = UDim2.new(0, newW + 36, 0, newH + 36)
+                        shadow.Size = UDim2.new(0, newW + 16, 0, newH + 16)
                         ambientGlow.Size = UDim2.new(0, newW + 70, 0, newH + 70)
                         if not minimized then
                                 body.Size = UDim2.new(1, 0, 0, newH - HEADER_H)
@@ -1650,15 +1665,14 @@ function Library:CreateWindow(cfg)
                         updateScale()
                         local x, y = clampWindowPosition(pinned.X, pinned.Y)
                         moveWindowTo(x, y)
-                        Tween(shadow, T15, { BackgroundTransparency = 0.52 })
+                        Tween(shadow, T15, { BackgroundTransparency = 0.82 })
                         Tween(ambientGlow, T15, { BackgroundTransparency = 0.93 })
                         Tween(frameStroke, T15, { Transparency = 0.55 })
                 end)
                 end
         end))
         onTheme(function()
-                Tween(resizeHandle, T20, { BackgroundColor3 = C.panelAlt })
-                Tween(resizeStroke, T20, { Color = C.border })
+                for _, dot in ipairs(gripDots) do Tween(dot, T20, { BackgroundColor3 = C.muted }) end
         end)
 
         -- ------------------------------------------------------------
@@ -1876,7 +1890,7 @@ function Library:CreateWindow(cfg)
                         resizeHandle.Visible = false
                         Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, HEADER_H) })
                         Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, 0) })
-                        Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, HEADER_H + 36) })
+                        Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 16, 0, HEADER_H + 16) })
                         Tween(ambientGlow, TMIN, { Size = UDim2.new(0, WIN_W + 70, 0, HEADER_H + 70) })
                         Tween(minGlyph, T20, { Rotation = 180 })
                 else
@@ -1887,7 +1901,7 @@ function Library:CreateWindow(cfg)
                         -- recompute body height from current WIN_H (supports resize)
                         Tween(frame, TMIN, { Size = UDim2.new(0, WIN_W, 0, WIN_H) })
                         Tween(body, TMIN, { Size = UDim2.new(1, 0, 0, WIN_H - HEADER_H) })
-                        Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 36, 0, WIN_H + 36) })
+                        Tween(shadow, TMIN, { Size = UDim2.new(0, WIN_W + 16, 0, WIN_H + 16) })
                         Tween(ambientGlow, TMIN, { Size = UDim2.new(0, WIN_W + 70, 0, WIN_H + 70) })
                         Tween(minGlyph, T20, { Rotation = 0 })
                 end
@@ -2844,9 +2858,13 @@ function Library:CreateWindow(cfg)
 
                         local knob = Instance.new("Frame")
                         knob.Size = UDim2.new(0, 18, 0, 18)
-                        knob.Position = UDim2.new(0, -9, 0.5, -9)
+                        -- Anchor to the physical centre so size changes never
+                        -- shift the knob away from the cursor while dragging.
+                        knob.AnchorPoint = Vector2.new(0.5, 0.5)
+                        knob.Position = UDim2.new(0, 0, 0.5, 0)
                         knob.BackgroundColor3 = C.white
                         knob.BorderSizePixel = 0
+                        knob.ZIndex = 3
                         knob.Parent = track
                         corner(knob, UDim.new(1, 0))
                         local knobStroke = stroke(knob, C.accent, 2)
@@ -2858,7 +2876,7 @@ function Library:CreateWindow(cfg)
                         knobShadow.Image = "rbxassetid://1316045217"
                         knobShadow.ImageColor3 = Color3.new(0, 0, 0)
                         knobShadow.ImageTransparency = 0.7
-                        knobShadow.ZIndex = knob.ZIndex - 1
+                        knobShadow.ZIndex = 2
                         knobShadow.Parent = knob
 
                         local function snap(v)
@@ -2875,10 +2893,10 @@ function Library:CreateWindow(cfg)
                                 local pct = math.clamp((value - minVal) / (maxVal - minVal), 0, 1)
                                 if animated then
                                         Tween(fill, T10, { Size = UDim2.new(pct, 0, 1, 0) })
-                                        Tween(knob, T10, { Position = UDim2.new(pct, -9, 0.5, -9) })
+                                        Tween(knob, T10, { Position = UDim2.new(pct, 0, 0.5, 0) })
                                 else
                                         fill.Size = UDim2.new(pct, 0, 1, 0)
-                                        knob.Position = UDim2.new(pct, -9, 0.5, -9)
+                                        knob.Position = UDim2.new(pct, 0, 0.5, 0)
                                 end
                                 valLbl.Text = tostring(value) .. suffix
                         end
@@ -2897,7 +2915,8 @@ function Library:CreateWindow(cfg)
                         function obj:Reset() return obj:Set(defaultValue) end
 
                                 local function setFromX(x)
-                                        local pct = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+                                        local trackWidth = math.max(track.AbsoluteSize.X, 1)
+                                        local pct = math.clamp((x - track.AbsolutePosition.X) / trackWidth, 0, 1)
                                         local v = snap(minVal + pct * (maxVal - minVal))
                                         if v ~= value then
                                                 value = v
@@ -2949,15 +2968,25 @@ function Library:CreateWindow(cfg)
                                                 -- register the drag and let the next frame handle it.
                                                 local trackPos = track.AbsolutePosition
                                                 local trackSize = track.AbsoluteSize
-                                                local layoutReady = trackSize.X > 1 and trackPos.X > 0
+                                                local layoutReady = trackSize.X > 1 and trackPos.X >= 0
+                                                local currentPct = math.clamp(
+                                                        (value - minVal) / math.max(maxVal - minVal, 1),
+                                                        0,
+                                                        1
+                                                )
+                                                local knobCenterX = trackPos.X + trackSize.X * currentPct
+                                                local gripOffsetX = inp.Position.X - knobCenterX
+                                                -- Preserve a direct grab on the knob. A click elsewhere
+                                                -- on the track still jumps intentionally to that value.
+                                                local grabbedKnob = layoutReady and math.abs(gripOffsetX) <= 14
                                                 -- The knob grows slightly while it is grabbed.
                                                 Tween(knob, T20, { Size = UDim2.new(0, 22, 0, 22) })
                                                 if layoutReady then
-                                                        setFromX(inp.Position.X)
+                                                        setFromX(grabbedKnob and (inp.Position.X - gripOffsetX) or inp.Position.X)
                                                         fireCallback()
                                                 end
                                                 registerDrag(hit, inp, function(pos)
-                                                        setFromX(pos.X)
+                                                        setFromX(grabbedKnob and (pos.X - gripOffsetX) or pos.X)
                                                         fireCallback()
                                                 end, function()
                                                         -- Knob shrinks back on release
@@ -3186,8 +3215,22 @@ function Library:CreateWindow(cfg)
                                 end
                         end
                         local function fire()
-                                obj.CurrentOption = multi and selectedValues() or selectedValues()[1]
-                                if callback then pcall(callback, obj.CurrentOption) end
+                                -- Take a stable value snapshot, then dispatch on the
+                                -- next scheduler turn. A game callback is allowed to
+                                -- yield or do expensive work; it must never hold the
+                                -- input event open or strand the popup catcher above
+                                -- the rest of the interface.
+                                local selectedOption = multi and selectedValues() or selectedValues()[1]
+                                obj.CurrentOption = selectedOption
+                                if type(callback) == "function" then
+                                        task.defer(function()
+                                                local ok, err = pcall(callback, selectedOption)
+                                                if not ok then
+                                                        warn("[RezurXLib] Dropdown '" .. tostring(nameText)
+                                                                .. "' callback error: " .. tostring(err))
+                                                end
+                                        end)
+                                end
                         end
                         obj.CurrentOption = multi and selectedValues() or selectedValues()[1]
                         refreshLabel()
@@ -3340,8 +3383,12 @@ function Library:CreateWindow(cfg)
                                                                 table.clear(selected)
                                                                 selected[index] = true
                                                                 refreshLabel()
-                                                                fire()
+                                                                -- Remove the full-screen dismissal layer
+                                                                -- before notifying user code. This makes a
+                                                                -- selected option immediately interactive
+                                                                -- even if the callback yields or errors.
                                                                 closeCurrentPopup()
+                                                                fire()
                                                         end
                                                 end)
                                         end
@@ -5604,11 +5651,11 @@ function Library:CreateWindow(cfg)
                 WIN_W, WIN_H = newW, newH
                 if minimized then
                         frame.Size = UDim2.new(0, newW, 0, HEADER_H)
-                        shadow.Size = UDim2.new(0, newW + 36, 0, HEADER_H + 36)
+                        shadow.Size = UDim2.new(0, newW + 16, 0, HEADER_H + 16)
                 else
                         frame.Size = UDim2.new(0, newW, 0, newH)
                         body.Size = UDim2.new(1, 0, 0, newH - HEADER_H)
-                        shadow.Size = UDim2.new(0, newW + 36, 0, newH + 36)
+                        shadow.Size = UDim2.new(0, newW + 16, 0, newH + 16)
                 end
                 ambientGlow.Size = UDim2.new(0, newW + 70, 0, (minimized and HEADER_H or newH) + 70)
                 updateScale()
