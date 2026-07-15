@@ -1,21 +1,104 @@
-MIT License
+# 📜 RezurX Public License
 
-Copyright (c) 2026 RezurXlab
+**Version 1.0 — Copyright © 2026 RezurXlab**
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+---
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+## Preamble
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This License governs the use, modification, and distribution of the RezurXLib software ("the Software").
+
+RezurXlab provides this Software under the terms set forth below, with the objective of fostering open collaboration, innovation, and responsible use within the developer community. By using, modifying, or distributing the Software, you accept and agree to be bound by the terms of this License.
+
+This License is designed to ensure that the Software remains free and accessible, while protecting the rights of the original creators and encouraging proper attribution and ethical conduct.
+
+---
+
+## 1. Definitions
+
+- **"Software"** refers to the RezurXLib library, including all source code, documentation, and associated assets.
+- **"Licensee"** refers to any person or entity using, modifying, or distributing the Software.
+- **"RezurXlab"** refers to the creator and maintainer of this Software.
+
+---
+
+## 2. Grant of Rights
+
+Subject to the terms and conditions of this License, RezurXlab hereby grants you a worldwide, royalty‑free, non‑exclusive, perpetual license to:
+
+- **Use** the Software in any project, personal or commercial.
+- **Modify** the Software to suit your needs.
+- **Distribute** original or modified versions of the Software.
+- **Sublicense** the Software as part of a larger work, provided the original attribution remains intact.
+
+---
+
+## 3. Conditions
+
+You may exercise the rights granted in Section 2 provided that:
+
+- You **retain the original copyright notice** and this License in all copies or substantial portions of the Software.
+- You **provide clear attribution** to RezurXlab in any derivative work (e.g., "Powered by RezurXLib").
+- You **do not claim ownership** of the original Software.
+- You **do not use the Software for malicious purposes**, including but not limited to phishing, fraud, or any activity that harms others.
+
+---
+
+## 4. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED **"AS IS"**, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL REZURXLAB OR ITS CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+## 5. Limitation of Liability
+
+To the fullest extent permitted by law, RezurXlab shall not be liable for any direct, indirect, incidental, special, exemplary, or consequential damages arising out of the use or inability to use the Software.
+
+---
+
+## 6. Termination
+
+This License is effective until terminated. Your rights under this License will terminate automatically without notice if you fail to comply with any of its terms. Upon termination, you must cease all use of the Software and destroy all copies in your possession.
+
+---
+
+## 7. Governing Law
+
+This License shall be governed by and construed in accordance with the laws of the jurisdiction in which RezurXlab is established, without regard to its conflict of law provisions.
+
+---
+
+## 8. Contact
+
+For questions, permissions, or inquiries regarding this License, please contact RezurXlab through the official channels.
+
+---
+
+## 9. Acceptance
+
+By using, modifying, or distributing the Software, you agree to be bound by the terms and conditions of this License. If you do not agree, you may not use the Software.
+
+---
+
+## 📌 Summary Table
+
+| Action | Permitted |
+|--------|-----------|
+| Commercial use | ✅ |
+| Modification | ✅ |
+| Distribution | ✅ |
+| Private use | ✅ |
+| Sublicensing | ✅ (with attribution) |
+| Claim ownership | ❌ |
+| Remove attribution | ❌ |
+| Malicious use | ❌ |
+
+---
+
+**© 2026 RezurXlab. All rights reserved.**
+
+---
+
+*This License is designed to promote open, responsible, and collaborative development. We appreciate your respect for the work and hope you build something remarkable with it.*
